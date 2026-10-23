@@ -1,0 +1,117 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --color-surface-950: var(--iq-950);
+  --color-surface-900: var(--iq-900);
+  --color-surface-800: var(--iq-800);
+  --color-surface-700: var(--iq-700);
+  --color-surface-600: var(--iq-600);
+  --color-surface-400: var(--iq-400);
+  --color-surface-300: var(--iq-300);
+  --color-surface-200: var(--iq-200);
+  --color-surface-100: var(--iq-100);
+
+  --color-accent: #0ea5a4;
+  --color-accent-dim: #0d7377;
+  --color-force: #ef4444;
+  --color-pass: #22c55e;
+  --color-warn: #f59e0b;
+  --color-fail: #ef4444;
+}
+
+/* Dark (default) — classroom projector–friendly high contrast */
+:root,
+[data-theme="dark"] {
+  --iq-950: #0b0f14;
+  --iq-900: #11171f;
+  --iq-800: #18212c;
+  --iq-700: #243041;
+  --iq-600: #334155;
+  --iq-400: #94a3b8;
+  --iq-300: #cbd5e1;
+  --iq-200: #e2e8f0;
+  --iq-100: #f1f5f9;
+}
+
+/* Light — bright classroom / print-friendly */
+[data-theme="light"] {
+  --iq-950: #f1f5f9;
+  --iq-900: #ffffff;
+  --iq-800: #e8eef5;
+  --iq-700: #cbd5e1;
+  --iq-600: #94a3b8;
+  --iq-400: #64748b;
+  --iq-300: #475569;
+  --iq-200: #334155;
+  --iq-100: #0f172a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--iq-950);
+  color: var(--iq-100);
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--iq-600);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--iq-400);
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.25s ease-out;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 1.4s ease-in-out infinite;
+}
