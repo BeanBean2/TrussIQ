@@ -10,6 +10,9 @@ import {
   Moon,
   Play,
   Redo2,
+  Save,
+  PanelRight,
+  Sparkles,
   Sun,
   Trash2,
   Undo2,
@@ -38,8 +41,11 @@ interface TopBarProps {
   onLoadPreset: (key: PresetKey) => void;
   onClear: () => void;
   onExportTruss: () => void;
+  onCopyTruss: () => void;
   onImportTruss: (file: File) => void;
   onExportOfficialReport: () => void;
+  draftStatus: string;
+  onSaveDraft: () => void;
   onToggleTheme: () => void;
   onUndo: () => void;
   onRedo: () => void;
@@ -49,6 +55,13 @@ interface TopBarProps {
   onOpenAR: () => void;
   onOpenCompare: () => void;
   onOpenShortcuts: () => void;
+  onOpenDemo: () => void;
+  onOpenHome: () => void;
+  sidebarOpen: boolean;
+  onToggleSidebar: () => void;
+  nodeCount: number;
+  beamCount: number;
+  analysisLabel: string;
 }
 
 export function TopBar({
@@ -67,8 +80,11 @@ export function TopBar({
   onLoadPreset,
   onClear,
   onExportTruss,
+  onCopyTruss,
   onImportTruss,
   onExportOfficialReport,
+  draftStatus,
+  onSaveDraft,
   onToggleTheme,
   onUndo,
   onRedo,
@@ -78,6 +94,13 @@ export function TopBar({
   onOpenAR,
   onOpenCompare,
   onOpenShortcuts,
+  onOpenDemo,
+  onOpenHome,
+  sidebarOpen,
+  onToggleSidebar,
+  nodeCount,
+  beamCount,
+  analysisLabel,
 }: TopBarProps) {
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -86,13 +109,28 @@ export function TopBar({
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-1.5 overflow-x-auto border-b border-surface-700 bg-surface-900 px-2">
-      <div className="flex shrink-0 items-center gap-2 border-r border-surface-700 pr-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/20 text-sm font-bold text-accent">
+      <button type="button" onClick={onOpenHome} title="Back to home" className="group flex shrink-0 items-center gap-2 border-r border-surface-700 pr-2 text-left">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/20 text-sm font-bold text-accent transition group-hover:bg-accent group-hover:text-surface-950">
           IQ
         </div>
         <div className="hidden sm:block">
           <h1 className="text-sm font-semibold leading-tight text-surface-100">TrussIQ</h1>
           <p className="text-[9px] leading-tight text-surface-400">Advanced FEA Lab</p>
+        </div>
+      </button>
+
+      <div className="hidden shrink-0 items-center gap-3 border-r border-surface-700 px-2 text-[10px] sm:flex">
+        <div>
+          <span className="text-surface-500">Nodes</span>
+          <strong className="ml-1 font-mono text-surface-200">{nodeCount}</strong>
+        </div>
+        <div>
+          <span className="text-surface-500">Members</span>
+          <strong className="ml-1 font-mono text-surface-200">{beamCount}</strong>
+        </div>
+        <div className="flex items-center gap-1 text-surface-400">
+          <span className={`h-1.5 w-1.5 rounded-full ${analysisLabel === 'Ready' ? 'bg-pass' : 'bg-warn'}`} />
+          {analysisLabel}
         </div>
       </div>
 
@@ -100,6 +138,7 @@ export function TopBar({
         type="button"
         onClick={onRunSolver}
         disabled={solving}
+        title="Run finite element analysis (Space)"
         className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-2.5 py-2 text-sm font-semibold text-surface-950 hover:bg-teal-400 disabled:opacity-60"
       >
         <Play size={14} fill="currentColor" />
@@ -219,6 +258,16 @@ export function TopBar({
 
       <button
         type="button"
+        onClick={onOpenDemo}
+        title="Launch guided demo"
+        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-accent/40 bg-accent/10 px-2 py-2 text-xs text-accent hover:bg-accent/20"
+      >
+        <Sparkles size={13} />
+        Demo
+      </button>
+
+      <button
+        type="button"
         onClick={onOpenTutorial}
         className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-surface-700 px-2 py-2 text-xs text-surface-300 hover:text-accent"
       >
@@ -268,6 +317,7 @@ export function TopBar({
       <button
         type="button"
         onClick={onToggleDeflection}
+        title="Toggle deflection view"
         className={`inline-flex shrink-0 items-center gap-1 rounded-lg border px-2 py-2 text-xs ${
           showDeflection
             ? 'border-accent/50 bg-accent/15 text-accent'
@@ -288,6 +338,23 @@ export function TopBar({
       )}
 
       <div className="ml-auto flex shrink-0 items-center gap-1">
+        <button
+          type="button"
+          onClick={onToggleSidebar}
+          title={sidebarOpen ? 'Hide inspector' : 'Show inspector'}
+          className={`rounded-lg border p-2 ${sidebarOpen ? 'border-accent/40 bg-accent/10 text-accent' : 'border-surface-700 text-surface-300'}`}
+        >
+          <PanelRight size={13} />
+        </button>
+        <button
+          type="button"
+          onClick={onSaveDraft}
+          title="Save local draft"
+          className="inline-flex items-center gap-1 rounded-lg border border-surface-700 px-2 py-2 text-[10px] text-surface-400 hover:border-accent/50 hover:text-accent"
+        >
+          <Save size={13} />
+          <span className="hidden xl:inline">{draftStatus}</span>
+        </button>
         <button
           type="button"
           onClick={onOpenShortcuts}
@@ -342,6 +409,16 @@ export function TopBar({
                   }}
                 >
                   <FileJson size={14} /> Save .truss
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-surface-200 hover:bg-surface-700"
+                  onClick={() => {
+                    onCopyTruss();
+                    setExportOpen(false);
+                  }}
+                >
+                  <FileJson size={14} /> Copy design JSON
                 </button>
                 <button
                   type="button"

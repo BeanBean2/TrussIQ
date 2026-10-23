@@ -63,10 +63,77 @@ body,
 
 body {
   font-family: var(--font-sans);
-  background: var(--iq-950);
+  background:
+    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--iq-800) 35%, transparent), transparent 30rem),
+    var(--iq-950);
   color: var(--iq-100);
   -webkit-font-smoothing: antialiased;
   transition: background 0.2s ease, color 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+.home-shell {
+  background:
+    radial-gradient(circle at 78% 12%, color-mix(in srgb, var(--color-accent) 10%, transparent), transparent 28rem),
+    radial-gradient(circle at 10% 55%, color-mix(in srgb, var(--iq-800) 32%, transparent), transparent 34rem),
+    var(--iq-950);
+}
+
+.home-visual {
+  isolation: isolate;
+}
+
+.truss-beam,
+.truss-node {
+  position: absolute;
+  display: block;
+}
+
+.truss-beam {
+  height: 3px;
+  transform-origin: left center;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2dd4bf, #0ea5a4);
+  box-shadow: 0 0 14px rgb(14 165 164 / 35%);
+}
+
+.truss-bottom { left: 0; right: 0; bottom: 0; }
+.truss-top { left: 20%; width: 60%; top: 0; }
+.truss-diagonal-a { left: 0; width: 36%; top: 100%; transform: rotate(-30deg); }
+.truss-diagonal-b { left: 20%; width: 36%; top: 100%; transform: rotate(-30deg); }
+.truss-diagonal-c { left: 40%; width: 36%; top: 100%; transform: rotate(30deg); }
+.truss-diagonal-d { left: 60%; width: 36%; top: 100%; transform: rotate(30deg); }
+
+.truss-node { height: 12px; width: 12px; border: 2px solid #99f6e4; border-radius: 999px; background: #0f766e; box-shadow: 0 0 16px rgb(45 212 191 / 65%); transform: translate(-50%, 50%); }
+.truss-node-a { left: 0; bottom: 0; }
+.truss-node-b { left: 20%; bottom: 0; }
+.truss-node-c { left: 40%; bottom: 0; }
+.truss-node-d { left: 60%; bottom: 0; }
+.truss-node-e { left: 80%; bottom: 0; }
+.truss-node-f { right: 0; bottom: 0; }
+
+button,
+select,
+input {
+  transition: border-color 0.16s ease, background-color 0.16s ease, color 0.16s ease,
+    opacity 0.16s ease;
+}
+
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 ::-webkit-scrollbar {

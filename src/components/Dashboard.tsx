@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { BookOpen, MousePointer2, Play, X } from 'lucide-react';
 import { useHistory } from '../hooks/useHistory';
 import { analyzeStructure } from '../lib/aiOptimizer';
 import { computeSectionProps, solidRodFromArea, type SectionParams } from '../lib/crossSections';
@@ -14,7 +15,14 @@ import { computeMassCost } from '../lib/massCost';
 import { DEFAULT_AREA, DEFAULT_MATERIAL_ID } from '../lib/materials';
 import { PRESET_LOADERS, type PresetKey } from '../lib/presets';
 import { captureCanvasPNG, generateOfficialReport } from '../lib/reportGenerator';
-import { exportTrussFile, parseTrussFile } from '../lib/trussIO';
+import {
+  exportTrussFile,
+  loadLocalDraft,
+  parseTrussFile,
+  saveLocalDraft,
+  serializeTruss,
+} from '../lib/trussIO';
+import { auditStructure } from '../lib/structureAudit';
 import type {
   Beam,
   DynamicsMode,
@@ -30,6 +38,7 @@ import type {
   WindParams,
 } from '../lib/types';
 import { CanvasEditor } from './CanvasEditor';
+import { DemoMode } from './DemoMode';
 import { ForceModal } from './ForceModal';
 import { FormulaInspector } from './FormulaInspector';
 import { ShortcutsModal } from './ShortcutsModal';
@@ -58,9 +67,10 @@ const EMPTY: StructureState = {
   defaultArea: DEFAULT_AREA,
 };
 
-export function Dashboard() {
+export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: boolean; onOpenHome?: () => void }) {
   const { state, commit, replace, undo, redo, canUndo, canRedo } = useHistory(EMPTY);
   const { nodes, beams, materialId, defaultArea } = state;
+  const audit = useMemo(() => auditStructure(nodes, beams), [nodes, beams]);
 
   const [tool, setTool] = useState<ToolMode>('select');
   const [gridSize, setGridSize] = useState<GridSize>(20);
@@ -83,6 +93,13 @@ export function Dashboard() {
   const [showCollapse, setShowCollapse] = useState(false);
   const [showAR, setShowAR] = useState(false);
   const [showCompare, setShowCompare] = useState(false);
+  const [showDemo, setShowDemo] = useState(false);
+  const [draftStatus, setDraftStatus] = useState('Preparing workspace');
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showGuide, setShowGuide] = useState(
+    () => localStorage.getItem('trussiq-guide-dismissed') !== '1',
+  );
 
   const [dynamicsMode, setDynamicsMode] = useState<DynamicsMode>('none');
   const [wind] = useState<WindParams>(DEFAULT_WIND);
@@ -122,8 +139,20 @@ export function Dashboard() {
   useEffect(() => {
     if (bootstrapped.current) return;
     bootstrapped.current = true;
-    replace(PRESET_LOADERS.howe.create());
+    const draft = loadLocalDraft();
+    replace(draft ?? PRESET_LOADERS.howe.create());
+    setDraftStatus(draft ? 'Restored local draft' : 'Ready to edit');
   }, [replace]);
+
+  useEffect(() => {
+    if (!bootstrapped.current) return;
+    saveLocalDraft(state);
+    setDraftStatus('Saved locally');
+  }, [state]);
+
+  useEffect(() => {
+    if (initialDemo) setShowDemo(true);
+  }, [initialDemo]);
 
   // Seismic real-time sweep — advance time & re-solve while active (~30 Hz)
   useEffect(() => {
@@ -190,6 +219,13 @@ export function Dashboard() {
       if (e.key === '?' || (e.shiftKey && e.key === '/')) {
         e.preventDefault();
         setShowShortcuts(true);
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        saveLocalDraft(state);
+        setDraftStatus('Saved locally');
         return;
       }
 
@@ -270,7 +306,7 @@ export function Dashboard() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedNodeId, selectedBeamId, commit, undo, redo, invalidate, runSolver]);
+  }, [selectedNodeId, selectedBeamId, commit, undo, redo, invalidate, runSolver, state]);
 
   const loadPreset = (key: PresetKey) => {
     replace(PRESET_LOADERS[key].create());
@@ -278,6 +314,21 @@ export function Dashboard() {
     setSelectedBeamId(null);
     setBeamDraftFrom(null);
     invalidate();
+  };
+
+  const launchDemo = () => {
+    const demo = PRESET_LOADERS.warren.create();
+    replace(demo);
+    setDynamicsMode('none');
+    setTool('select');
+    setSelectedNodeId(null);
+    setSelectedBeamId(null);
+    setBeamDraftFrom(null);
+    setHighlightBeamIds([]);
+    setHighlightNodeIds([]);
+    setShowDemo(false);
+    setShowDeflection(true);
+    setResult(solveTruss(demo.nodes, demo.beams));
   };
 
   const clearAll = () => {
@@ -438,6 +489,16 @@ export function Dashboard() {
     }
   };
 
+  const handleCopyTruss = async () => {
+    try {
+      await navigator.clipboard.writeText(serializeTruss(state));
+      setCopyStatus('Design JSON copied to clipboard');
+    } catch {
+      setCopyStatus('Clipboard access unavailable');
+    }
+    window.setTimeout(() => setCopyStatus(null), 2400);
+  };
+
   const handleOfficialReport = async () => {
     const massCost = computeMassCost(nodes, beams);
     const img = captureCanvasPNG(canvasEl.current);
@@ -476,8 +537,14 @@ export function Dashboard() {
         onLoadPreset={loadPreset}
         onClear={clearAll}
         onExportTruss={() => exportTrussFile(state, 'TrussIQ Design')}
+        onCopyTruss={handleCopyTruss}
         onImportTruss={handleImport}
         onExportOfficialReport={handleOfficialReport}
+        draftStatus={draftStatus}
+        onSaveDraft={() => {
+          saveLocalDraft(state);
+          setDraftStatus('Saved locally');
+        }}
         onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
         onUndo={() => {
           undo();
@@ -497,6 +564,13 @@ export function Dashboard() {
         onOpenAR={() => setShowAR(true)}
         onOpenCompare={() => setShowCompare(true)}
         onOpenShortcuts={() => setShowShortcuts(true)}
+        onOpenDemo={() => setShowDemo(true)}
+        onOpenHome={onOpenHome ?? (() => undefined)}
+        sidebarOpen={sidebarOpen}
+        onToggleSidebar={() => setSidebarOpen((open) => !open)}
+        nodeCount={nodes.length}
+        beamCount={beams.length}
+        analysisLabel={result?.success ? 'Analyzed' : result ? 'Needs review' : 'Ready'}
       />
 
       {dynamicsMode !== 'none' && (
@@ -514,6 +588,12 @@ export function Dashboard() {
               t={seismic.time.toFixed(2)}s · A={seismic.amplitude} m/s² · ω={seismic.omega} rad/s
             </span>
           )}
+        </div>
+      )}
+
+      {copyStatus && (
+        <div className="pointer-events-none fixed bottom-5 left-1/2 z-40 -translate-x-1/2 rounded-lg border border-accent/40 bg-surface-900 px-3 py-2 text-xs font-medium text-accent shadow-xl animate-fade-in">
+          {copyStatus}
         </div>
       )}
 
@@ -556,9 +636,65 @@ export function Dashboard() {
             onEraseAt={eraseAt}
             onClearBeamDraft={() => setBeamDraftFrom(null)}
           />
+          {showGuide && nodes.length > 0 && !result && (
+            <section className="absolute left-4 top-4 w-[min(23rem,calc(100%-2rem))] rounded-xl border border-accent/30 bg-surface-900/95 p-4 shadow-2xl shadow-black/20 backdrop-blur-sm animate-fade-in">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2 text-accent">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent/15">
+                    <BookOpen size={15} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-surface-100">Your model is ready</p>
+                    <p className="text-[10px] text-surface-400">A quick path from geometry to insight</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Dismiss workspace guide"
+                  onClick={() => {
+                    setShowGuide(false);
+                    localStorage.setItem('trussiq-guide-dismissed', '1');
+                  }}
+                  className="rounded-md p-1 text-surface-500 hover:bg-surface-800 hover:text-surface-200"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="mt-4 grid gap-2">
+                <div className="flex items-center gap-2 rounded-lg bg-surface-800/80 px-2.5 py-2 text-[11px] text-surface-300">
+                  <MousePointer2 size={14} className="shrink-0 text-accent" />
+                  Select a member or node to inspect its properties.
+                </div>
+                <div className="flex items-center gap-2 rounded-lg bg-surface-800/80 px-2.5 py-2 text-[11px] text-surface-300">
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-surface-700 font-mono text-[9px] text-surface-200">2</span>
+                  Adjust material or area in the inspector.
+                </div>
+                <div className="flex items-center gap-2 rounded-lg bg-surface-800/80 px-2.5 py-2 text-[11px] text-surface-300">
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-surface-700 font-mono text-[9px] text-surface-200">3</span>
+                  Run FEA to reveal forces and safety.
+                </div>
+              </div>
+              <div className="mt-4 flex gap-2">
+                <button
+                  type="button"
+                  onClick={runSolver}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-surface-950 hover:bg-teal-300"
+                >
+                  <Play size={13} fill="currentColor" /> Run first analysis
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowTutorial(true)}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-surface-700 px-3 py-2 text-xs font-medium text-surface-300 hover:border-accent/50 hover:text-accent"
+                >
+                  <BookOpen size={13} /> Tour
+                </button>
+              </div>
+            </section>
+          )}
         </main>
 
-        <Sidebar
+        {sidebarOpen && <Sidebar
           materialId={materialId}
           defaultArea={defaultArea}
           result={result}
@@ -580,7 +716,8 @@ export function Dashboard() {
             setHighlightNodeIds(ids);
             setSelectedNodeId(ids[0] ?? null);
           }}
-        />
+          audit={audit}
+        />}
       </div>
 
       {forceTarget && (
@@ -607,6 +744,7 @@ export function Dashboard() {
         />
       )}
       {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
+      {showDemo && <DemoMode onClose={() => setShowDemo(false)} onLaunch={launchDemo} />}
       <Suspense fallback={null}>
         {showCollapse && (
           <CollapseAnimator

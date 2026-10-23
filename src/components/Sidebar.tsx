@@ -4,8 +4,10 @@ import type { SectionParams } from '../lib/crossSections';
 import { solidRodFromArea } from '../lib/crossSections';
 import { MATERIALS } from '../lib/materials';
 import type { AIAnalysis, Beam, FEAResult, Node } from '../lib/types';
+import type { StructureAudit } from '../lib/structureAudit';
 import { AIAdvisor } from './AIAdvisor';
 import { AnalyticsPanel } from './AnalyticsPanel';
+import { AuditPanel } from './AuditPanel';
 import { GlossaryTooltip } from './GlossaryTooltip';
 import { SectionEditor } from './SectionEditor';
 
@@ -25,9 +27,10 @@ interface SidebarProps {
   onOpenFormula: () => void;
   onFocusBeams: (ids: string[]) => void;
   onFocusNodes: (ids: string[]) => void;
+  audit: StructureAudit;
 }
 
-type Tab = 'inspect' | 'analytics' | 'ai';
+type Tab = 'inspect' | 'analytics' | 'audit' | 'ai';
 
 export function Sidebar({
   materialId,
@@ -45,6 +48,7 @@ export function Sidebar({
   onOpenFormula,
   onFocusBeams,
   onFocusNodes,
+  audit,
 }: SidebarProps) {
   const [tab, setTab] = useState<Tab>('inspect');
   const selectedBeam = beams.find((b) => b.id === selectedBeamId) ?? null;
@@ -58,6 +62,7 @@ export function Sidebar({
           [
             ['inspect', 'Inspect'],
             ['analytics', 'Analytics'],
+            ['audit', 'Audit'],
             ['ai', 'AI'],
           ] as const
         ).map(([id, label]) => (
@@ -75,6 +80,11 @@ export function Sidebar({
             {id === 'ai' && ai.bucklingBeamIds.length > 0 && (
               <span className="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-warn px-1 text-[9px] text-surface-950">
                 {ai.bucklingBeamIds.length}
+              </span>
+            )}
+            {id === 'audit' && audit.errors + audit.warnings > 0 && (
+              <span className="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-warn px-1 text-[9px] text-surface-950">
+                {audit.errors + audit.warnings}
               </span>
             )}
           </button>
@@ -268,6 +278,14 @@ export function Sidebar({
             beams={beams}
             result={result}
             materialId={materialId}
+          />
+        )}
+
+        {tab === 'audit' && (
+          <AuditPanel
+            audit={audit}
+            onFocusBeams={onFocusBeams}
+            onFocusNodes={onFocusNodes}
           />
         )}
 
