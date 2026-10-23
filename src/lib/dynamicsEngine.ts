@@ -104,7 +104,7 @@ export function applySeismicLoads(
       return { ...n, fx: n.fx + a * 0.5 };
     }
     const m = lumpedMassKg(n.id, nodes, beams);
-    const Fx = m * a * 1000; // scale kg·m/s² → classroom N (×1000 for visible effect on mm model)
+    const Fx = m * a; // kg·m/s² = N; no length-unit conversion is needed for force
     return { ...n, fx: n.fx + Fx };
   });
 }

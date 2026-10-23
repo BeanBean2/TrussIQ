@@ -69,6 +69,28 @@ export function AnalyticsPanel({ nodes, beams, result, materialId }: AnalyticsPa
         </p>
       ) : (
         <>
+          <div className="rounded-lg border border-surface-700 bg-surface-800/50 px-3 py-2.5">
+            <div className="flex items-center justify-between">
+              <h4 className="text-[11px] font-medium text-surface-300">Support reactions</h4>
+              <span className="font-mono text-[10px] text-surface-500">global forces</span>
+            </div>
+            <div className="mt-2 space-y-1.5 font-mono text-[10px]">
+              {(result.reactions ?? [])
+                .filter((reaction) => Math.abs(reaction.fx) > 1e-6 || Math.abs(reaction.fy) > 1e-6)
+                .map((reaction) => (
+                  <div key={reaction.nodeId} className="flex items-center justify-between text-surface-400">
+                    <span>{reaction.nodeId}</span>
+                    <span className="text-surface-200">
+                      Rx {reaction.fx.toFixed(1)} N · Ry {reaction.fy.toFixed(1)} N
+                    </span>
+                  </div>
+                ))}
+              {(result.reactions ?? []).every(
+                (reaction) => Math.abs(reaction.fx) <= 1e-6 && Math.abs(reaction.fy) <= 1e-6,
+              ) && <span className="text-surface-500">No non-zero reactions reported.</span>}
+            </div>
+          </div>
+
           <div>
             <h4 className="mb-1 text-[11px] font-medium text-surface-300">
               Force Distribution (N)

@@ -242,6 +242,18 @@ export function solveTruss(nodes: Node[], beams: Beam[]): FEAResult {
     uy: u[2 * i + 1],
   }));
 
+  // Recover support reactions from the unmodified global equilibrium residual.
+  // Free DOFs should have a near-zero residual; constrained DOFs carry the reactions.
+  const reactions = nodes.map((node, i) => ({
+    nodeId: node.id,
+    fx: isFixed[2 * i]
+      ? K[2 * i].reduce((sum, value, j) => sum + value * u[j], 0) - F[2 * i]
+      : 0,
+    fy: isFixed[2 * i + 1]
+      ? K[2 * i + 1].reduce((sum, value, j) => sum + value * u[j], 0) - F[2 * i + 1]
+      : 0,
+  }));
+
   // --- Member forces & stresses ---
   // Axial force: N = (EA/L) · [(ux2−ux1)c + (uy2−uy1)s]
   // Positive N ⇒ tension (elongation along member axis).
@@ -285,6 +297,7 @@ export function solveTruss(nodes: Node[], beams: Beam[]): FEAResult {
     unstable: false,
     members,
     displacements,
+    reactions,
     maxSafetyRatio,
     passed: !anyYielded,
   };

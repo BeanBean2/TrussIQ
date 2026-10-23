@@ -73,12 +73,22 @@ export interface NodalDisplacement {
   uy: number;
 }
 
+export interface SupportReaction {
+  nodeId: string;
+  /** Reaction force in the global X direction (N). */
+  fx: number;
+  /** Reaction force in the global Y direction (N). */
+  fy: number;
+}
+
 export interface FEAResult {
   success: boolean;
   unstable: boolean;
   message?: string;
   members: MemberResult[];
   displacements: NodalDisplacement[];
+  /** Reactions recovered at constrained degrees of freedom (N). */
+  reactions?: SupportReaction[];
   /** Max |σ|/σ_yield across all members */
   maxSafetyRatio: number;
   passed: boolean;

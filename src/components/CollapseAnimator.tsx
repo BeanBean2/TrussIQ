@@ -1,4 +1,4 @@
-import { Pause, Play, SkipForward, X, Zap } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Pause, Play, SkipForward, X, Zap } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { runCollapseSequence } from '../lib/collapseEngine';
 import { stressColor } from '../lib/feaEngine';
@@ -17,6 +17,32 @@ export function CollapseAnimator({ nodes, beams, onClose }: CollapseAnimatorProp
   const frames = useMemo(() => runCollapseSequence(nodes, beams), [nodes, beams]);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(true);
+  const [intervalMs, setIntervalMs] = useState(700);
+
+  useEffect(() => {
+    setIndex(0);
+    setPlaying(true);
+  }, [frames]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) return;
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        setPlaying(false);
+        setIndex((current) => Math.max(0, current - 1));
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        setPlaying(false);
+        setIndex((current) => Math.min(frames.length - 1, current + 1));
+      } else if (event.key === ' ') {
+        event.preventDefault();
+        setPlaying((current) => !current);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [frames.length]);
 
   useEffect(() => {
     if (!playing || frames.length === 0) return;
@@ -28,9 +54,9 @@ export function CollapseAnimator({ nodes, beams, onClose }: CollapseAnimatorProp
         }
         return i + 1;
       });
-    }, 700);
+    }, intervalMs);
     return () => clearInterval(id);
-  }, [playing, frames.length]);
+  }, [playing, frames.length, intervalMs]);
 
   const frame: CollapseFrame | undefined = frames[index];
   const failed = new Set(frame?.failedBeamIds ?? []);
@@ -65,6 +91,7 @@ export function CollapseAnimator({ nodes, beams, onClose }: CollapseAnimatorProp
             beams={beams}
             frame={frame}
             failed={failed}
+            transitionMs={Math.max(180, intervalMs - 80)}
           />
         </div>
 
@@ -79,6 +106,12 @@ export function CollapseAnimator({ nodes, beams, onClose }: CollapseAnimatorProp
             <span>
               Failed members:{' '}
               <span className="font-mono text-fail">{failed.size}</span>
+            </span>
+            <span>
+              Stage:{' '}
+              <span className="font-mono text-surface-200">
+                {frame ? index + 1 : 0}/{frames.length}
+              </span>
             </span>
             <span>
               {frame?.collapsed ? (
@@ -104,6 +137,32 @@ export function CollapseAnimator({ nodes, beams, onClose }: CollapseAnimatorProp
           />
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setPlaying(false);
+                setIndex((current) => Math.max(0, current - 1));
+              }}
+              disabled={index === 0}
+              aria-label="Previous collapse frame"
+              title="Previous frame"
+              className="rounded-lg border border-surface-700 p-2 text-surface-300 hover:border-accent/50 hover:text-accent disabled:opacity-30"
+            >
+              <ChevronLeft size={15} />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPlaying(false);
+                setIndex((current) => Math.min(frames.length - 1, current + 1));
+              }}
+              disabled={index >= frames.length - 1}
+              aria-label="Next collapse frame"
+              title="Next frame"
+              className="rounded-lg border border-surface-700 p-2 text-surface-300 hover:border-accent/50 hover:text-accent disabled:opacity-30"
+            >
+              <ChevronRight size={15} />
+            </button>
             <button
               type="button"
               onClick={() => setPlaying((p) => !p)}
@@ -133,6 +192,30 @@ export function CollapseAnimator({ nodes, beams, onClose }: CollapseAnimatorProp
             >
               Restart
             </button>
+            <label className="ml-auto flex items-center gap-1.5 text-xs text-surface-400">
+              Pace
+              <select
+                value={intervalMs}
+                onChange={(e) => setIntervalMs(Number(e.target.value))}
+                className="rounded-md border border-surface-700 bg-surface-800 px-2 py-2 text-xs text-surface-200"
+                aria-label="Animation pace"
+              >
+                <option value={1100}>Slow</option>
+                <option value={700}>Normal</option>
+                <option value={350}>Fast</option>
+              </select>
+            </label>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-surface-500">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-5 rounded-full bg-surface-600" /> Undeformed geometry
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-5 rounded-full bg-accent" /> Active members
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-5 rounded-full bg-fail" /> Yielded members
+            </span>
           </div>
         </div>
       </div>
@@ -145,11 +228,13 @@ function CollapseCanvas({
   beams,
   frame,
   failed,
+  transitionMs,
 }: {
   nodes: Node[];
   beams: Beam[];
   frame?: CollapseFrame;
   failed: Set<string>;
+  transitionMs: number;
 }) {
   // Simple SVG so we don't fight the main canvas RAF loop
   if (nodes.length === 0) {
@@ -167,7 +252,14 @@ function CollapseCanvas({
 
   const memberMap = new Map(frame?.result.members.map((m) => [m.beamId, m]) ?? []);
   const disp = new Map(frame?.result.displacements.map((d) => [d.nodeId, d]) ?? []);
-  const scale = 40;
+  const maxDisplacement = Math.max(
+    0,
+    ...Array.from(disp.values(), (d) => Math.hypot(d.ux, d.uy)),
+  );
+  const modelExtent = Math.max(maxX - minX, maxY - minY);
+  const scale = maxDisplacement > 1e-9
+    ? Math.min(80, Math.max(6, (modelExtent * 0.2) / maxDisplacement))
+    : 40;
 
   const pos = (n: Node) => {
     const d = disp.get(n.id);
@@ -179,6 +271,24 @@ function CollapseCanvas({
 
   return (
     <svg viewBox={vb} className="mx-auto h-72 w-full max-w-2xl">
+      {beams.map((b) => {
+        const ni = nodes.find((n) => n.id === b.nodeI);
+        const nj = nodes.find((n) => n.id === b.nodeJ);
+        if (!ni || !nj) return null;
+        return (
+          <line
+            key={`ghost-${b.id}`}
+            x1={ni.x}
+            y1={ni.y}
+            x2={nj.x}
+            y2={nj.y}
+            stroke="#64748b"
+            strokeWidth={2}
+            strokeDasharray="4 6"
+            opacity={0.35}
+          />
+        );
+      })}
       {beams.map((b) => {
         const ni = nodes.find((n) => n.id === b.nodeI);
         const nj = nodes.find((n) => n.id === b.nodeJ);
@@ -204,12 +314,26 @@ function CollapseCanvas({
             strokeDasharray={isFailed ? '6 4' : undefined}
             opacity={isFailed ? 0.55 : 1}
             strokeLinecap="round"
+            style={{
+              transition: `x1 ${transitionMs}ms ease, y1 ${transitionMs}ms ease, x2 ${transitionMs}ms ease, y2 ${transitionMs}ms ease, opacity 240ms ease, stroke 240ms ease`,
+            }}
           />
         );
       })}
       {nodes.map((n) => {
         const p = pos(n);
-        return <circle key={n.id} cx={p.x} cy={p.y} r={6} fill="#e2e8f0" />;
+        return (
+          <circle
+            key={n.id}
+            cx={p.x}
+            cy={p.y}
+            r={6}
+            fill="#e2e8f0"
+            stroke="#0f1620"
+            strokeWidth={1.5}
+            style={{ transition: `cx ${transitionMs}ms ease, cy ${transitionMs}ms ease` }}
+          />
+        );
       })}
     </svg>
   );

@@ -94,6 +94,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
   const [showAR, setShowAR] = useState(false);
   const [showCompare, setShowCompare] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
+  const [presentationMode, setPresentationMode] = useState(false);
   const [draftStatus, setDraftStatus] = useState('Preparing workspace');
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -229,6 +230,8 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
         return;
       }
 
+      if (showCollapse && e.key === ' ') return;
+
       if (e.key === ' ' && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         runSolver();
@@ -278,6 +281,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
         setShowCompare(false);
         setHighlightBeamIds([]);
         setHighlightNodeIds([]);
+        setPresentationMode(false);
       }
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedNodeId) {
@@ -306,7 +310,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedNodeId, selectedBeamId, commit, undo, redo, invalidate, runSolver, state]);
+  }, [selectedNodeId, selectedBeamId, commit, undo, redo, invalidate, runSolver, state, showCollapse]);
 
   const loadPreset = (key: PresetKey) => {
     replace(PRESET_LOADERS[key].create());
@@ -514,7 +518,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
 
   return (
     <div className="flex h-full flex-col bg-surface-950 text-surface-100">
-      <TopBar
+      {!presentationMode && <TopBar
         gridSize={gridSize}
         showDeflection={showDeflection}
         deflectionScale={deflectionScale}
@@ -565,13 +569,14 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
         onOpenCompare={() => setShowCompare(true)}
         onOpenShortcuts={() => setShowShortcuts(true)}
         onOpenDemo={() => setShowDemo(true)}
+        onOpenPresentation={() => setPresentationMode(true)}
         onOpenHome={onOpenHome ?? (() => undefined)}
         sidebarOpen={sidebarOpen}
         onToggleSidebar={() => setSidebarOpen((open) => !open)}
         nodeCount={nodes.length}
         beamCount={beams.length}
         analysisLabel={result?.success ? 'Analyzed' : result ? 'Needs review' : 'Ready'}
-      />
+      />}
 
       {dynamicsMode !== 'none' && (
         <div className="flex items-center gap-3 border-b border-warn/30 bg-warn/10 px-3 py-1.5 text-[11px] text-warn">
@@ -598,13 +603,13 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
       )}
 
       <div className="flex min-h-0 flex-1">
-        <Toolbar
+        {!presentationMode && <Toolbar
           tool={tool}
           onToolChange={(t) => {
             setTool(t);
             setBeamDraftFrom(null);
           }}
-        />
+        />}
 
         <main className="relative min-w-0 flex-1">
           <CanvasEditor
@@ -636,6 +641,14 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
             onEraseAt={eraseAt}
             onClearBeamDraft={() => setBeamDraftFrom(null)}
           />
+          {presentationMode && (
+            <PresentationHud
+              result={result}
+              nodeCount={nodes.length}
+              beamCount={beams.length}
+              onExit={() => setPresentationMode(false)}
+            />
+          )}
           {showGuide && nodes.length > 0 && !result && (
             <section className="absolute left-4 top-4 w-[min(23rem,calc(100%-2rem))] rounded-xl border border-accent/30 bg-surface-900/95 p-4 shadow-2xl shadow-black/20 backdrop-blur-sm animate-fade-in">
               <div className="flex items-start justify-between gap-3">
@@ -694,7 +707,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
           )}
         </main>
 
-        {sidebarOpen && <Sidebar
+        {!presentationMode && sidebarOpen && <Sidebar
           materialId={materialId}
           defaultArea={defaultArea}
           result={result}
@@ -760,6 +773,66 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
           <CompareMode current={state} onClose={() => setShowCompare(false)} />
         )}
       </Suspense>
+    </div>
+  );
+}
+
+function PresentationHud({
+  result,
+  nodeCount,
+  beamCount,
+  onExit,
+}: {
+  result: FEAResult | null;
+  nodeCount: number;
+  beamCount: number;
+  onExit: () => void;
+}) {
+  const maxDeflection = result?.success
+    ? Math.max(...result.displacements.map((d) => Math.hypot(d.ux, d.uy)), 0)
+    : 0;
+  const safetyFactor = result?.maxSafetyRatio
+    ? 1 / result.maxSafetyRatio
+    : Number.POSITIVE_INFINITY;
+
+  return (
+    <section className="pointer-events-none absolute inset-x-4 top-4 z-10 flex items-start justify-between gap-4 animate-fade-in">
+      <div className="pointer-events-auto max-w-xl rounded-xl border border-surface-700/80 bg-surface-900/90 px-4 py-3 shadow-2xl backdrop-blur-sm">
+        <div className="flex items-center gap-2">
+          <span className={`h-2 w-2 rounded-full ${result?.success ? (result.passed ? 'bg-pass' : 'bg-fail') : 'bg-warn'}`} />
+          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-surface-400">TrussIQ presentation</span>
+        </div>
+        <h2 className="mt-1 text-lg font-semibold tracking-tight text-surface-100">
+          {result?.success ? (result.passed ? 'Structure passes the current load case' : 'Structure needs a design revision') : 'Run FEA to reveal the load path'}
+        </h2>
+        <p className="mt-1 text-xs text-surface-400">
+          {nodeCount} nodes · {beamCount} members · Direct Stiffness Method
+        </p>
+      </div>
+
+      <div className="pointer-events-auto flex flex-col items-end gap-2">
+        <button
+          type="button"
+          onClick={onExit}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-surface-700/80 bg-surface-900/90 px-3 py-2 text-xs font-medium text-surface-200 shadow-xl backdrop-blur-sm hover:border-accent/50 hover:text-accent"
+        >
+          <X size={13} /> Exit presentation
+        </button>
+        <div className="grid grid-cols-3 gap-2">
+          <PresentationMetric label="Safety factor" value={Number.isFinite(safetyFactor) ? `${safetyFactor.toFixed(2)}×` : '∞'} />
+          <PresentationMetric label="Max deflection" value={result?.success ? `${maxDeflection.toFixed(3)} mm` : '—'} />
+          <PresentationMetric label="Peak stress" value={result?.success ? `${(result.maxSafetyRatio * 100).toFixed(0)}%` : '—'} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PresentationMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-24 rounded-lg border border-surface-700/80 bg-surface-900/90 px-2.5 py-2 text-right shadow-xl backdrop-blur-sm">
+      <div className="text-[9px] uppercase tracking-wide text-surface-500">{label}</div>
+      <div className="mt-0.5 font-mono text-sm font-semibold text-accent">{value}</div>
     </div>
   );
 }

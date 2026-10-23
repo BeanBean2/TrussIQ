@@ -7,6 +7,7 @@ import {
   FileJson,
   HelpCircle,
   Keyboard,
+  MonitorPlay,
   Moon,
   Play,
   Redo2,
@@ -56,6 +57,7 @@ interface TopBarProps {
   onOpenCompare: () => void;
   onOpenShortcuts: () => void;
   onOpenDemo: () => void;
+  onOpenPresentation: () => void;
   onOpenHome: () => void;
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
@@ -95,6 +97,7 @@ export function TopBar({
   onOpenCompare,
   onOpenShortcuts,
   onOpenDemo,
+  onOpenPresentation,
   onOpenHome,
   sidebarOpen,
   onToggleSidebar,
@@ -264,6 +267,16 @@ export function TopBar({
       >
         <Sparkles size={13} />
         Demo
+      </button>
+
+      <button
+        type="button"
+        onClick={onOpenPresentation}
+        title="Open presentation mode"
+        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-surface-700 px-2 py-2 text-xs text-surface-300 hover:border-accent/40 hover:text-accent"
+      >
+        <MonitorPlay size={13} />
+        Present
       </button>
 
       <button

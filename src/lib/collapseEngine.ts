@@ -30,6 +30,20 @@ export function runCollapseSequence(
   let active = beams.map((b) => ({ ...b }));
   const failed = new Set<string>();
 
+  // Keep the undeformed, zero-load state as the first frame so the animation
+  // has a real baseline before the first load increment is applied.
+  const initialResult = solveTruss(nodes, active);
+  const initialCollapsed =
+    !initialResult.success || initialResult.unstable || active.length === 0;
+  frames.push({
+    loadPct: 0,
+    result: initialResult,
+    failedBeamIds: [],
+    activeBeamIds: active.map((b) => b.id),
+    collapsed: initialCollapsed,
+  });
+  if (initialCollapsed) return frames;
+
   for (let s = 1; s <= steps; s++) {
     const loadPct = (maxPct * s) / steps;
     const scale = loadPct / 100;

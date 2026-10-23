@@ -68,7 +68,13 @@ body {
     var(--iq-950);
   color: var(--iq-100);
   -webkit-font-smoothing: antialiased;
+  font-synthesis: none;
   transition: background 0.2s ease, color 0.2s ease;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 35%, transparent);
+  color: var(--iq-100);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -83,14 +89,50 @@ body {
 }
 
 .home-shell {
+  position: relative;
   background:
-    radial-gradient(circle at 78% 12%, color-mix(in srgb, var(--color-accent) 10%, transparent), transparent 28rem),
-    radial-gradient(circle at 10% 55%, color-mix(in srgb, var(--iq-800) 32%, transparent), transparent 34rem),
+    radial-gradient(circle at 78% 8%, color-mix(in srgb, var(--color-accent) 12%, transparent), transparent 31rem),
+    radial-gradient(circle at 8% 42%, color-mix(in srgb, var(--iq-800) 32%, transparent), transparent 36rem),
     var(--iq-950);
+}
+
+.home-shell::before {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 20%, rgb(255 255 255 / 1.5%) 48%, transparent 72%);
+  content: '';
+  opacity: 0.35;
+}
+
+.home-shell > * {
+  position: relative;
+  z-index: 1;
+}
+
+.home-nav {
+  border-bottom: 1px solid color-mix(in srgb, var(--iq-700) 55%, transparent);
+}
+
+.home-nav a {
+  text-underline-offset: 4px;
 }
 
 .home-visual {
   isolation: isolate;
+  background-image: linear-gradient(135deg, rgb(255 255 255 / 2%), transparent 45%);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 22%), inset 0 1px rgb(255 255 255 / 4%);
+}
+
+.home-visual::after {
+  position: absolute;
+  inset: 12% 8% 18%;
+  z-index: -1;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 13%, transparent);
+  border-radius: 999px;
+  content: '';
+  transform: rotate(-7deg);
 }
 
 .truss-beam,
@@ -105,6 +147,7 @@ body {
   border-radius: 999px;
   background: linear-gradient(90deg, #2dd4bf, #0ea5a4);
   box-shadow: 0 0 14px rgb(14 165 164 / 35%);
+  animation: beam-pulse 3.2s ease-in-out infinite;
 }
 
 .truss-bottom { left: 0; right: 0; bottom: 0; }
@@ -121,6 +164,12 @@ body {
 .truss-node-d { left: 60%; bottom: 0; }
 .truss-node-e { left: 80%; bottom: 0; }
 .truss-node-f { right: 0; bottom: 0; }
+
+@keyframes beam-pulse {
+  0%,
+  100% { opacity: 0.72; }
+  50% { opacity: 1; }
+}
 
 button,
 select,
@@ -181,4 +230,11 @@ input:focus-visible {
 
 .animate-pulse-glow {
   animation: pulse-glow 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .truss-beam,
+  .animate-pulse-glow {
+    animation: none;
+  }
 }
