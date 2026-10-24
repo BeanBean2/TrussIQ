@@ -428,6 +428,9 @@ export function CanvasEditor({
     <div ref={containerRef} className="relative h-full w-full overflow-hidden">
       <canvas
         ref={canvasRef}
+        role="img"
+        aria-label={`Truss editor canvas. ${nodes.length} nodes and ${beams.length} members.`}
+        tabIndex={0}
         className="absolute inset-0"
         style={{ cursor }}
         onClick={handleClick}
@@ -438,6 +441,18 @@ export function CanvasEditor({
           onClearBeamDraft();
         }}
       />
+      {nodes.length === 0 && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6">
+          <div className="max-w-sm rounded-xl border border-surface-700 bg-surface-900/90 px-5 py-4 text-center shadow-lg backdrop-blur">
+            <p className="text-sm font-semibold text-surface-100">Start a new truss</p>
+            <p className="mt-1 text-xs leading-relaxed text-surface-400">
+              Choose <span className="font-mono text-accent">Node (N)</span> to place joints,
+              then use <span className="font-mono text-accent">Beam (B)</span> to connect them.
+              Load a preset any time from the top bar.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="pointer-events-none absolute bottom-3 left-3 rounded-md bg-surface-900/80 px-2.5 py-1.5 font-mono text-[10px] text-surface-400 backdrop-blur">
         Snap {gridSize}px · {tool.toUpperCase()}
         {beamDraftFrom ? ' · click second node' : ''}

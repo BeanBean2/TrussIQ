@@ -242,13 +242,25 @@ export function Sidebar({
                       {result.members.map((m) => (
                         <tr
                           key={m.beamId}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`Select member ${m.beamId}`}
+                          onClick={() => onFocusBeams([m.beamId])}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              onFocusBeams([m.beamId]);
+                            }
+                          }}
                           className={`border-t border-surface-800 ${
-                            m.yielded
+                            selectedBeamId === m.beamId
+                              ? 'bg-accent/20 text-accent'
+                              : m.yielded
                               ? 'bg-fail/15 text-fail'
                               : ai.bucklingBeamIds.includes(m.beamId)
                                 ? 'bg-warn/10 text-warn'
                                 : 'text-surface-300'
-                          }`}
+                          } cursor-pointer transition-colors hover:bg-surface-700/60`}
                         >
                           <td className="px-2 py-1.5">
                             {m.beamId.replace(/^b_/, '').slice(-4)}

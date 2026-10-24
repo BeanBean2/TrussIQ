@@ -124,6 +124,14 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
     () => analyzeStructure(dynamicNodes, beams, result),
     [dynamicNodes, beams, result],
   );
+  const analysisStatus =
+    !nodes.length || !beams.length
+      ? 'empty'
+      : !result
+        ? 'stale'
+        : result.success && !result.unstable
+          ? 'ready'
+          : 'failed';
 
   const invalidate = useCallback(() => {
     setResult(null);
@@ -184,6 +192,12 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
   }, [dynamicsMode, nodes, beams, wind, seismic.amplitude, seismic.omega]);
 
   const runSolver = useCallback(() => {
+    if (nodes.length < 2 || beams.length < 1) {
+      setUnstableMsg(
+        'Add at least two nodes and one beam before running the FEA solver.',
+      );
+      return;
+    }
     setSolving(true);
     requestAnimationFrame(() => {
       const loaded = applyDynamics(nodes, beams, dynamicsMode, wind, seismic);
@@ -336,6 +350,9 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
   };
 
   const clearAll = () => {
+    if ((nodes.length > 0 || beams.length > 0) && !window.confirm('Clear the current design?')) {
+      return;
+    }
     replace(EMPTY);
     setSelectedNodeId(null);
     setSelectedBeamId(null);
@@ -527,6 +544,9 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
         canUndo={canUndo}
         canRedo={canRedo}
         dynamicsMode={dynamicsMode}
+        nodeCount={nodes.length}
+        beamCount={beams.length}
+        analysisStatus={analysisStatus}
         onGridSize={setGridSize}
         onToggleDeflection={() => {
           if (!result?.success) {

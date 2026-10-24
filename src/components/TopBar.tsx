@@ -26,6 +26,8 @@ import { useRef, useState } from 'react';
 import { PRESET_LOADERS, type PresetKey } from '../lib/presets';
 import type { DynamicsMode, GridSize, ThemeMode } from '../lib/types';
 
+type AnalysisStatus = 'empty' | 'ready' | 'stale' | 'failed';
+
 interface TopBarProps {
   gridSize: GridSize;
   showDeflection: boolean;
@@ -35,6 +37,9 @@ interface TopBarProps {
   canUndo: boolean;
   canRedo: boolean;
   dynamicsMode: DynamicsMode;
+  nodeCount: number;
+  beamCount: number;
+  analysisStatus: AnalysisStatus;
   onGridSize: (g: GridSize) => void;
   onToggleDeflection: () => void;
   onDeflectionScale: (s: number) => void;
@@ -75,6 +80,9 @@ export function TopBar({
   canUndo,
   canRedo,
   dynamicsMode,
+  nodeCount,
+  beamCount,
+  analysisStatus,
   onGridSize,
   onToggleDeflection,
   onDeflectionScale,
@@ -233,6 +241,7 @@ export function TopBar({
         type="button"
         onClick={onOpenCollapse}
         title="Plastic collapse animation"
+        aria-label="Open plastic collapse animation"
         className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-surface-700 px-2 py-2 text-xs text-surface-300 hover:border-fail/40 hover:text-fail"
       >
         <Zap size={13} />
@@ -243,6 +252,7 @@ export function TopBar({
         type="button"
         onClick={onOpenAR}
         title="3D / WebAR"
+        aria-label="Open 3D and WebAR viewer"
         className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-surface-700 px-2 py-2 text-xs text-surface-300 hover:border-accent/40 hover:text-accent"
       >
         <Box size={13} />
@@ -253,6 +263,7 @@ export function TopBar({
         type="button"
         onClick={onOpenCompare}
         title="Compare designs"
+        aria-label="Compare designs"
         className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-surface-700 px-2 py-2 text-xs text-surface-300 hover:border-accent/40 hover:text-accent"
       >
         <Columns2 size={13} />
@@ -282,6 +293,8 @@ export function TopBar({
       <button
         type="button"
         onClick={onOpenTutorial}
+        title="Open classroom tutorial"
+        aria-label="Open classroom tutorial"
         className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-surface-700 px-2 py-2 text-xs text-surface-300 hover:text-accent"
       >
         <BookOpen size={13} />
@@ -290,6 +303,8 @@ export function TopBar({
       <button
         type="button"
         onClick={onClear}
+        title="Clear design"
+        aria-label="Clear design"
         className="shrink-0 rounded-lg border border-surface-700 p-2 text-surface-300 hover:text-fail"
       >
         <Trash2 size={13} />
@@ -300,6 +315,8 @@ export function TopBar({
           type="button"
           onClick={onUndo}
           disabled={!canUndo}
+          title="Undo (Ctrl+Z)"
+          aria-label="Undo"
           className="rounded-lg border border-surface-700 p-2 text-surface-300 disabled:opacity-30"
         >
           <Undo2 size={13} />
@@ -308,6 +325,8 @@ export function TopBar({
           type="button"
           onClick={onRedo}
           disabled={!canRedo}
+          title="Redo (Ctrl+Y)"
+          aria-label="Redo"
           className="rounded-lg border border-surface-700 p-2 text-surface-300 disabled:opacity-30"
         >
           <Redo2 size={13} />
@@ -330,7 +349,8 @@ export function TopBar({
       <button
         type="button"
         onClick={onToggleDeflection}
-        title="Toggle deflection view"
+        title={showDeflection ? 'Hide deflected shape' : 'Show deflected shape'}
+        aria-label={showDeflection ? 'Hide deflected shape' : 'Show deflected shape'}
         className={`inline-flex shrink-0 items-center gap-1 rounded-lg border px-2 py-2 text-xs ${
           showDeflection
             ? 'border-accent/50 bg-accent/15 text-accent'
@@ -349,6 +369,34 @@ export function TopBar({
           className="w-16 accent-accent"
         />
       )}
+
+      <div
+        className="hidden shrink-0 items-center gap-2 rounded-lg border border-surface-700 bg-surface-800/70 px-2.5 py-1.5 text-[10px] sm:flex"
+        aria-live="polite"
+      >
+        <span className="font-mono text-surface-300">
+          {nodeCount} nodes · {beamCount} members
+        </span>
+        <span
+          className={
+            analysisStatus === 'ready'
+              ? 'text-pass'
+              : analysisStatus === 'failed'
+                ? 'text-fail'
+                : analysisStatus === 'stale'
+                  ? 'text-warn'
+                  : 'text-surface-500'
+          }
+        >
+          {analysisStatus === 'ready'
+            ? 'Analysis current'
+            : analysisStatus === 'failed'
+              ? 'Analysis failed'
+              : analysisStatus === 'stale'
+                ? 'Changes not analyzed'
+                : 'Ready to model'}
+        </span>
+      </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-1">
         <button
@@ -372,6 +420,7 @@ export function TopBar({
           type="button"
           onClick={onOpenShortcuts}
           title="Shortcuts (?)"
+          aria-label="Open keyboard shortcuts"
           className="rounded-lg border border-surface-700 p-2 text-surface-300"
         >
           <Keyboard size={13} />
@@ -379,6 +428,8 @@ export function TopBar({
         <button
           type="button"
           onClick={onToggleTheme}
+          title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+          aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
           className="rounded-lg border border-surface-700 p-2 text-surface-300"
         >
           {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
@@ -404,6 +455,7 @@ export function TopBar({
               setPresetsOpen(false);
               setDynOpen(false);
             }}
+            aria-label="Open export and import menu"
             className="inline-flex items-center gap-1 rounded-lg border border-surface-700 bg-surface-800 px-2 py-2 text-xs text-surface-200"
           >
             <Download size={13} />
