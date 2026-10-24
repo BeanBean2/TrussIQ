@@ -79,6 +79,7 @@ export function CollapseAnimator({ nodes, beams, onClose }: CollapseAnimatorProp
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close collapse animation"
             className="rounded-md p-1 text-surface-400 hover:bg-surface-800"
           >
             <X size={16} />

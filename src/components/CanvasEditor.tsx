@@ -163,9 +163,12 @@ export function CanvasEditor({
     const ro = new ResizeObserver(resize);
     ro.observe(container);
 
-    const draw = () => {
+    let lastFrame = performance.now();
+    const draw = (now: number) => {
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
+      const elapsed = Math.min(0.05, Math.max(0, (now - lastFrame) / 1000));
+      lastFrame = now;
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
 
@@ -177,19 +180,20 @@ export function CanvasEditor({
       ctx.fillRect(0, 0, w, h);
 
       drawGrid(ctx, w, h, gridSize, light);
-      dashOffsetRef.current = (dashOffsetRef.current + 0.4) % 20;
+      dashOffsetRef.current = (dashOffsetRef.current + elapsed * 24) % 20;
 
       const memberMap = new Map(
         result?.success ? result.members.map((m) => [m.beamId, m]) : [],
       );
+      const nodeMap = new Map(nodes.map((node) => [node.id, node]));
 
       // Undeformed ghost when showing deflection
       if (showDeflection && result?.success) {
         ctx.save();
         ctx.globalAlpha = 0.25;
         for (const b of beams) {
-          const ni = nodes.find((n) => n.id === b.nodeI);
-          const nj = nodes.find((n) => n.id === b.nodeJ);
+          const ni = nodeMap.get(b.nodeI);
+          const nj = nodeMap.get(b.nodeJ);
           if (!ni || !nj) continue;
           ctx.strokeStyle = '#64748b';
           ctx.lineWidth = 1.5;
@@ -205,8 +209,8 @@ export function CanvasEditor({
 
       // Beams
       for (const b of beams) {
-        const ni = nodes.find((n) => n.id === b.nodeI);
-        const nj = nodes.find((n) => n.id === b.nodeJ);
+        const ni = nodeMap.get(b.nodeI);
+        const nj = nodeMap.get(b.nodeJ);
         if (!ni || !nj) continue;
         const pi = getDisplaced(ni);
         const pj = getDisplaced(nj);

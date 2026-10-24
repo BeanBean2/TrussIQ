@@ -8,6 +8,7 @@ import {
   HelpCircle,
   Keyboard,
   MonitorPlay,
+  LoaderCircle,
   Moon,
   Play,
   Redo2,
@@ -152,8 +153,12 @@ export function TopBar({
         title="Run finite element analysis (Space)"
         className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-2.5 py-2 text-sm font-semibold text-surface-950 hover:bg-teal-400 disabled:opacity-60"
       >
-        <Play size={14} fill="currentColor" />
-        Run FEA
+        {solving ? (
+          <LoaderCircle size={14} className="animate-spin" />
+        ) : (
+          <Play size={14} fill="currentColor" />
+        )}
+        {solving ? 'Solving…' : 'Run FEA'}
       </button>
 
       <div className="relative shrink-0">
