@@ -40,6 +40,7 @@ import type {
 import { CanvasEditor } from './CanvasEditor';
 import { DemoMode } from './DemoMode';
 import { MissionMode } from './MissionMode';
+import { CollaborationCenter } from './CollaborationCenter';
 import { ForceModal } from './ForceModal';
 import { FormulaInspector } from './FormulaInspector';
 import { ShortcutsModal } from './ShortcutsModal';
@@ -97,6 +98,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
   const [showDemo, setShowDemo] = useState(false);
   const [presentationMode, setPresentationMode] = useState(false);
   const [showMission, setShowMission] = useState(false);
+  const [showCollaboration, setShowCollaboration] = useState(false);
   const [draftStatus, setDraftStatus] = useState('Preparing workspace');
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -581,6 +583,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
         onOpenDemo={() => setShowDemo(true)}
         onOpenPresentation={() => setPresentationMode(true)}
         onOpenMission={() => setShowMission(true)}
+        onOpenCollaboration={() => setShowCollaboration(true)}
         onOpenHome={onOpenHome ?? (() => undefined)}
         sidebarOpen={sidebarOpen}
         onToggleSidebar={() => setSidebarOpen((open) => !open)}
@@ -780,6 +783,18 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
             setShowMission(true);
           }}
           onClose={() => setShowMission(false)}
+        />
+      )}
+      {showCollaboration && (
+        <CollaborationCenter
+          state={state}
+          result={result}
+          audit={audit}
+          onClose={() => setShowCollaboration(false)}
+          onApplySnapshot={(snapshot) => {
+            replace(snapshot);
+            invalidate();
+          }}
         />
       )}
       <Suspense fallback={null}>

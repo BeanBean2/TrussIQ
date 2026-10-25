@@ -9,6 +9,7 @@ import {
   Keyboard,
   MonitorPlay,
   Flag,
+  Users,
   LoaderCircle,
   Moon,
   Play,
@@ -61,6 +62,7 @@ interface TopBarProps {
   onOpenDemo: () => void;
   onOpenPresentation: () => void;
   onOpenMission: () => void;
+  onOpenCollaboration: () => void;
   onOpenHome: () => void;
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
@@ -102,6 +104,7 @@ export function TopBar({
   onOpenDemo,
   onOpenPresentation,
   onOpenMission,
+  onOpenCollaboration,
   onOpenHome,
   sidebarOpen,
   onToggleSidebar,
@@ -298,6 +301,16 @@ export function TopBar({
       >
         <Flag size={13} />
         Mission
+      </button>
+
+      <button
+        type="button"
+        onClick={onOpenCollaboration}
+        title="Open collaboration center"
+        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-surface-700 px-2 py-2 text-xs text-surface-300 hover:border-accent/40 hover:text-accent"
+      >
+        <Users size={13} />
+        Team
       </button>
 
       <button
