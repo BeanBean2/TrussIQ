@@ -204,6 +204,7 @@ export function TopBar({
           }}
           aria-expanded={presetsOpen}
           aria-haspopup="menu"
+          aria-controls="presets-menu"
           data-tooltip="Load a proven truss configuration"
           className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-2 text-xs transition-all ${
             presetsOpen
@@ -211,12 +212,16 @@ export function TopBar({
               : 'border-surface-700 bg-surface-800/80 text-surface-200 hover:border-surface-500 hover:bg-surface-700/80'
           }`}
         >
-          Presets <ChevronDown size={12} />
+          Presets <ChevronDown size={12} className={`transition-transform duration-200 ${presetsOpen ? 'rotate-180' : ''}`} />
         </button>
         {presetsOpen && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setPresetsOpen(false)} />
-            <div role="menu" className="dropdown-enter absolute left-0 top-full z-20 mt-2 w-56 overflow-hidden rounded-xl border border-surface-600/80 bg-surface-800/95 p-1.5 shadow-2xl shadow-black/30 backdrop-blur-xl">
+            <div id="presets-menu" role="menu" aria-label="Truss presets" className="dropdown-enter menu-expand absolute left-0 top-full z-20 mt-2 w-64 overflow-hidden rounded-xl border border-surface-600/80 bg-surface-800/95 p-1.5 shadow-2xl shadow-black/30 backdrop-blur-xl">
+              <div className="px-3 pb-1.5 pt-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-accent">Choose a starting model</p>
+                <p className="mt-0.5 text-[10px] text-surface-500">Load geometry, supports, and sample forces.</p>
+              </div>
               {(Object.keys(PRESET_LOADERS) as PresetKey[]).map((key) => (
                 <button
                   key={key}
@@ -247,6 +252,7 @@ export function TopBar({
           }}
           aria-expanded={dynOpen}
           aria-haspopup="menu"
+          aria-controls="dynamics-menu"
           data-tooltip="Apply wind or seismic loading"
           className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-2 text-xs transition-all ${
             dynamicsMode !== 'none'
@@ -258,12 +264,16 @@ export function TopBar({
         >
           <Wind size={13} />
           Dynamics
-          <ChevronDown size={12} />
+          <ChevronDown size={12} className={`transition-transform duration-200 ${dynOpen ? 'rotate-180' : ''}`} />
         </button>
         {dynOpen && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setDynOpen(false)} />
-            <div role="menu" className="dropdown-enter absolute left-0 top-full z-20 mt-2 w-52 overflow-hidden rounded-xl border border-surface-600/80 bg-surface-800/95 p-1.5 shadow-2xl shadow-black/30 backdrop-blur-xl">
+            <div id="dynamics-menu" role="menu" aria-label="Loading scenarios" className="dropdown-enter menu-expand absolute left-0 top-full z-20 mt-2 w-60 overflow-hidden rounded-xl border border-surface-600/80 bg-surface-800/95 p-1.5 shadow-2xl shadow-black/30 backdrop-blur-xl">
+              <div className="px-3 pb-1.5 pt-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-warn">Choose a load case</p>
+                <p className="mt-0.5 text-[10px] text-surface-500">Apply an environment and re-solve the model.</p>
+              </div>
               {(
                 [
                   ['none', 'Static only', 'Gravity and applied loads'],
