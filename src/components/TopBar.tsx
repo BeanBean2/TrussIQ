@@ -27,8 +27,6 @@ import { useRef, useState } from 'react';
 import { PRESET_LOADERS, type PresetKey } from '../lib/presets';
 import type { DynamicsMode, GridSize, ThemeMode } from '../lib/types';
 
-type AnalysisStatus = 'empty' | 'ready' | 'stale' | 'failed';
-
 interface TopBarProps {
   gridSize: GridSize;
   showDeflection: boolean;
@@ -38,9 +36,6 @@ interface TopBarProps {
   canUndo: boolean;
   canRedo: boolean;
   dynamicsMode: DynamicsMode;
-  nodeCount: number;
-  beamCount: number;
-  analysisStatus: AnalysisStatus;
   onGridSize: (g: GridSize) => void;
   onToggleDeflection: () => void;
   onDeflectionScale: (s: number) => void;
@@ -81,9 +76,6 @@ export function TopBar({
   canUndo,
   canRedo,
   dynamicsMode,
-  nodeCount,
-  beamCount,
-  analysisStatus,
   onGridSize,
   onToggleDeflection,
   onDeflectionScale,
@@ -374,34 +366,6 @@ export function TopBar({
           className="w-16 accent-accent"
         />
       )}
-
-      <div
-        className="hidden shrink-0 items-center gap-2 rounded-lg border border-surface-700 bg-surface-800/70 px-2.5 py-1.5 text-[10px] sm:flex"
-        aria-live="polite"
-      >
-        <span className="font-mono text-surface-300">
-          {nodeCount} nodes · {beamCount} members
-        </span>
-        <span
-          className={
-            analysisStatus === 'ready'
-              ? 'text-pass'
-              : analysisStatus === 'failed'
-                ? 'text-fail'
-                : analysisStatus === 'stale'
-                  ? 'text-warn'
-                  : 'text-surface-500'
-          }
-        >
-          {analysisStatus === 'ready'
-            ? 'Analysis current'
-            : analysisStatus === 'failed'
-              ? 'Analysis failed'
-              : analysisStatus === 'stale'
-                ? 'Changes not analyzed'
-                : 'Ready to model'}
-        </span>
-      </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-1">
         <button

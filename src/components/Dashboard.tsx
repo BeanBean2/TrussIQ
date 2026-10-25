@@ -124,15 +124,6 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
     () => analyzeStructure(dynamicNodes, beams, result),
     [dynamicNodes, beams, result],
   );
-  const analysisStatus =
-    !nodes.length || !beams.length
-      ? 'empty'
-      : !result
-        ? 'stale'
-        : result.success && !result.unstable
-          ? 'ready'
-          : 'failed';
-
   const invalidate = useCallback(() => {
     setResult(null);
     setShowDeflection(false);
@@ -544,9 +535,6 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
         canUndo={canUndo}
         canRedo={canRedo}
         dynamicsMode={dynamicsMode}
-        nodeCount={nodes.length}
-        beamCount={beams.length}
-        analysisStatus={analysisStatus}
         onGridSize={setGridSize}
         onToggleDeflection={() => {
           if (!result?.success) {
