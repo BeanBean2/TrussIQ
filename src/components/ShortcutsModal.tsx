@@ -32,6 +32,7 @@ export function ShortcutsModal({ onClose }: ShortcutsModalProps) {
             type="button"
             onClick={onClose}
             className="rounded-md p-1 text-surface-400 hover:bg-surface-800"
+            aria-label="Close keyboard shortcuts"
           >
             <X size={16} />
           </button>

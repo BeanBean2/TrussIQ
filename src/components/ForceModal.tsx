@@ -41,8 +41,8 @@ export function ForceModal({ nodeId, initialFx, initialFy, onApply, onClose }: F
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close force editor"
             className="rounded-md p-1 text-surface-400 hover:bg-surface-800 hover:text-surface-100"
-            aria-label="Close"
           >
             <X size={16} />
           </button>

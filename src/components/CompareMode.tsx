@@ -43,6 +43,7 @@ export function CompareMode({ current, onClose }: CompareModeProps) {
         <button
           type="button"
           onClick={onClose}
+          aria-label="Close design comparison"
           className="rounded-md p-1 text-surface-400 hover:bg-surface-800"
         >
           <X size={16} />

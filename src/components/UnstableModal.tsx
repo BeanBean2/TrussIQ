@@ -23,6 +23,7 @@ export function UnstableModal({ message, onClose }: UnstableModalProps) {
             <button
               type="button"
               onClick={onClose}
+              aria-label="Close analysis message"
               className="mt-4 rounded-lg bg-surface-700 px-4 py-2 text-sm font-medium text-surface-100 hover:bg-surface-600"
             >
               Got it

@@ -101,7 +101,7 @@ export function ARViewer({ nodes, beams, onClose }: ARViewerProps) {
             type="button"
             onClick={onClose}
             className="rounded-lg border border-surface-700 p-2 text-surface-300 hover:bg-surface-800"
-            aria-label="Close"
+            aria-label="Close 3D viewer"
           >
             <X size={16} />
           </button>
