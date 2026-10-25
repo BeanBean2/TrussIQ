@@ -35,6 +35,7 @@ interface CommandPaletteProps {
   onExport: () => void;
   onClear: () => void;
   onOpenBrief: () => void;
+  onOpenImpact: () => void;
 }
 
 interface Command {
@@ -62,6 +63,7 @@ export function CommandPalette({
   onExport,
   onClear,
   onOpenBrief,
+  onOpenImpact,
 }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
@@ -86,8 +88,9 @@ export function CommandPalette({
       { id: 'export', label: 'Export design report', description: 'Open the export and reporting menu', group: 'Files', icon: <Download size={15} />, run: onExport },
       { id: 'clear', label: 'Clear current design', description: 'Remove all nodes and members', group: 'Files', icon: <X size={15} />, run: onClear },
       { id: 'brief', label: 'Edit project brief', description: 'Capture the objective, constraints, and story behind the design', group: 'Review', icon: <ClipboardList size={15} />, run: onOpenBrief },
+      { id: 'impact', label: 'Open challenge impact dashboard', description: 'Track learning evidence and create a judge-ready project story', group: 'Review', icon: <Flag size={15} />, run: onOpenImpact },
     ],
-    [onClear, onDynamics, onExport, onLoadPreset, onOpenAR, onOpenBrief, onOpenCollaboration, onOpenCollapse, onOpenCompare, onOpenMission, onOpenPresentation, onOpenShortcuts, onOpenTutorial, onRunSolver],
+    [onClear, onDynamics, onExport, onLoadPreset, onOpenAR, onOpenBrief, onOpenCollaboration, onOpenCollapse, onOpenCompare, onOpenImpact, onOpenMission, onOpenPresentation, onOpenShortcuts, onOpenTutorial, onRunSolver],
   );
   const filtered = commands.filter((command) => `${command.label} ${command.description} ${command.group}`.toLowerCase().includes(query.toLowerCase()));
 

@@ -43,6 +43,7 @@ import { MissionMode } from './MissionMode';
 import { CollaborationCenter } from './CollaborationCenter';
 import { CommandPalette } from './CommandPalette';
 import { ProjectBrief, type ProjectBriefData } from './ProjectBrief';
+import { ImpactDashboard } from './ImpactDashboard';
 import { ForceModal } from './ForceModal';
 import { FormulaInspector } from './FormulaInspector';
 import { ShortcutsModal } from './ShortcutsModal';
@@ -103,6 +104,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
   const [showCollaboration, setShowCollaboration] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showBrief, setShowBrief] = useState(false);
+  const [showImpact, setShowImpact] = useState(false);
   const [draftStatus, setDraftStatus] = useState('Preparing workspace');
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -310,6 +312,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
         setShowCollaboration(false);
         setShowCommandPalette(false);
         setShowBrief(false);
+        setShowImpact(false);
       }
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedNodeId) {
@@ -605,6 +608,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
         onOpenCollaboration={() => setShowCollaboration(true)}
         onOpenCommand={() => setShowCommandPalette(true)}
         onOpenBrief={() => setShowBrief(true)}
+        onOpenImpact={() => setShowImpact(true)}
         onOpenHome={onOpenHome ?? (() => undefined)}
         sidebarOpen={sidebarOpen}
         onToggleSidebar={() => setSidebarOpen((open) => !open)}
@@ -861,6 +865,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
           }}
           onClear={clearAll}
           onOpenBrief={() => setShowBrief(true)}
+          onOpenImpact={() => setShowImpact(true)}
         />
       )}
       {showBrief && (
@@ -874,6 +879,16 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
             link.click();
             URL.revokeObjectURL(url);
           }}
+        />
+      )}
+      {showImpact && (
+        <ImpactDashboard
+          nodes={nodes}
+          beams={beams}
+          result={result}
+          ai={ai}
+          audit={audit}
+          onClose={() => setShowImpact(false)}
         />
       )}
       <Suspense fallback={null}>

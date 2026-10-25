@@ -12,6 +12,7 @@ import {
   MonitorPlay,
   Flag,
   Users,
+  Trophy,
   LoaderCircle,
   Moon,
   Play,
@@ -67,6 +68,7 @@ interface TopBarProps {
   onOpenCollaboration: () => void;
   onOpenCommand: () => void;
   onOpenBrief: () => void;
+  onOpenImpact: () => void;
   onOpenHome: () => void;
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
@@ -111,6 +113,7 @@ export function TopBar({
   onOpenCollaboration,
   onOpenCommand,
   onOpenBrief,
+  onOpenImpact,
   onOpenHome,
   sidebarOpen,
   onToggleSidebar,
@@ -359,6 +362,16 @@ export function TopBar({
       >
         <Users size={13} />
         Team
+      </button>
+
+      <button
+        type="button"
+        onClick={onOpenImpact}
+        title="Open challenge impact dashboard"
+        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-accent/30 bg-accent/10 px-2 py-2 text-xs text-accent hover:bg-accent/20"
+      >
+        <Trophy size={13} />
+        Impact
       </button>
 
       <button
