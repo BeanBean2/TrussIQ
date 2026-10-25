@@ -56,7 +56,7 @@ export function Sidebar({
   const mat = MATERIALS.find((m) => m.id === materialId);
 
   return (
-    <aside className="flex w-[22rem] shrink-0 flex-col border-l border-surface-700 bg-surface-900">
+    <aside className="absolute inset-y-0 right-0 z-20 flex w-[min(22rem,calc(100vw-3.5rem))] max-w-full shrink-0 flex-col border-l border-surface-700 bg-surface-900 shadow-2xl shadow-black/25 lg:static lg:w-[22rem] lg:shadow-none">
       <div className="flex border-b border-surface-700">
         {(
           [

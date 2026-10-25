@@ -525,7 +525,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
   };
 
   return (
-    <div className="flex h-full flex-col bg-surface-950 text-surface-100">
+    <div className="flex h-[100dvh] min-h-[32rem] flex-col overflow-hidden bg-surface-950 text-surface-100">
       {!presentationMode && <TopBar
         gridSize={gridSize}
         showDeflection={showDeflection}
@@ -610,7 +610,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
         {!presentationMode && <Toolbar
           tool={tool}
           onToolChange={(t) => {
