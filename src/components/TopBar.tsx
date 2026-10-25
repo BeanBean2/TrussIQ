@@ -8,6 +8,7 @@ import {
   HelpCircle,
   Keyboard,
   MonitorPlay,
+  Flag,
   LoaderCircle,
   Moon,
   Play,
@@ -59,6 +60,7 @@ interface TopBarProps {
   onOpenShortcuts: () => void;
   onOpenDemo: () => void;
   onOpenPresentation: () => void;
+  onOpenMission: () => void;
   onOpenHome: () => void;
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
@@ -99,6 +101,7 @@ export function TopBar({
   onOpenShortcuts,
   onOpenDemo,
   onOpenPresentation,
+  onOpenMission,
   onOpenHome,
   sidebarOpen,
   onToggleSidebar,
@@ -285,6 +288,16 @@ export function TopBar({
       >
         <MonitorPlay size={13} />
         Present
+      </button>
+
+      <button
+        type="button"
+        onClick={onOpenMission}
+        title="Open engineering mission"
+        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-warn/40 bg-warn/10 px-2 py-2 text-xs text-warn hover:bg-warn/20"
+      >
+        <Flag size={13} />
+        Mission
       </button>
 
       <button

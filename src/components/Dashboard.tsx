@@ -39,6 +39,7 @@ import type {
 } from '../lib/types';
 import { CanvasEditor } from './CanvasEditor';
 import { DemoMode } from './DemoMode';
+import { MissionMode } from './MissionMode';
 import { ForceModal } from './ForceModal';
 import { FormulaInspector } from './FormulaInspector';
 import { ShortcutsModal } from './ShortcutsModal';
@@ -95,6 +96,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
   const [showCompare, setShowCompare] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
   const [presentationMode, setPresentationMode] = useState(false);
+  const [showMission, setShowMission] = useState(false);
   const [draftStatus, setDraftStatus] = useState('Preparing workspace');
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -578,6 +580,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
         onOpenShortcuts={() => setShowShortcuts(true)}
         onOpenDemo={() => setShowDemo(true)}
         onOpenPresentation={() => setPresentationMode(true)}
+        onOpenMission={() => setShowMission(true)}
         onOpenHome={onOpenHome ?? (() => undefined)}
         sidebarOpen={sidebarOpen}
         onToggleSidebar={() => setSidebarOpen((open) => !open)}
@@ -766,6 +769,19 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
       )}
       {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
       {showDemo && <DemoMode onClose={() => setShowDemo(false)} onLaunch={launchDemo} />}
+      {showMission && (
+        <MissionMode
+          state={state}
+          result={result}
+          audit={audit}
+          onRunSolver={runSolver}
+          onLoadChallenge={() => {
+            loadPreset('warren');
+            setShowMission(true);
+          }}
+          onClose={() => setShowMission(false)}
+        />
+      )}
       <Suspense fallback={null}>
         {showCollapse && (
           <CollapseAnimator
