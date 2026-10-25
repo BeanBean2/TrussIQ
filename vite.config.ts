@@ -5,6 +5,11 @@ import path from 'path'
 
 export default defineConfig({
   base: process.env.GITHUB_ACTIONS ? '/TrussIQ/' : '/',
+  server: {
+    host: '0.0.0.0',
+    port: 5173,
+    strictPort: true,
+  },
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

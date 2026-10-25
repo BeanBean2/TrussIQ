@@ -26,6 +26,18 @@ npm install
 npm run dev
 ```
 
+### Share the local app with VS Code Live Share
+
+The development server listens on port `5173` so a trusted collaborator can open it through Live Share:
+
+1. Start the app with `npm run dev`.
+2. Open the **Ports** view in VS Code.
+3. Find port `5173`, right-click it, and choose **Forward Port** (or **Share Port** in Live Share).
+4. Send the generated forwarded URL to your collaborator.
+5. They open that URL in their browser; they do not use your `localhost` URL, since `localhost` would point to their own computer.
+
+Only share the port with people you trust. Stop the dev server or remove the forwarded port when you are finished.
+
 ## Stack
 
 Vite · React 19 · TypeScript · Tailwind v4 · Three.js · Recharts · jsPDF
