@@ -1,4 +1,4 @@
-import { CheckCircle2, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, Gauge, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import type { SectionParams } from '../lib/crossSections';
 import { solidRodFromArea } from '../lib/crossSections';
@@ -27,10 +27,11 @@ interface SidebarProps {
   onOpenFormula: () => void;
   onFocusBeams: (ids: string[]) => void;
   onFocusNodes: (ids: string[]) => void;
+  onRunSolver: () => void;
   audit: StructureAudit;
 }
 
-type Tab = 'inspect' | 'analytics' | 'audit' | 'ai';
+type Tab = 'health' | 'inspect' | 'analytics' | 'audit' | 'ai';
 
 export function Sidebar({
   materialId,
@@ -48,6 +49,7 @@ export function Sidebar({
   onOpenFormula,
   onFocusBeams,
   onFocusNodes,
+  onRunSolver,
   audit,
 }: SidebarProps) {
   const [tab, setTab] = useState<Tab>('inspect');
@@ -60,6 +62,7 @@ export function Sidebar({
       <div className="flex border-b border-surface-700">
         {(
           [
+            ['health', 'Health'],
             ['inspect', 'Inspect'],
             ['analytics', 'Analytics'],
             ['audit', 'Audit'],
@@ -92,6 +95,19 @@ export function Sidebar({
       </div>
 
       <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4">
+        {tab === 'health' && (
+          <HealthPanel
+            nodes={nodes}
+            beams={beams}
+            result={result}
+            ai={ai}
+            audit={audit}
+            onRunSolver={onRunSolver}
+            onFocusBeams={onFocusBeams}
+            onFocusNodes={onFocusNodes}
+          />
+        )}
+
         {tab === 'inspect' && (
           <>
             <section className="space-y-2">
@@ -189,6 +205,7 @@ export function Sidebar({
                 onSectionChange={(section) =>
                   onSelectedBeamSection(section, selectedBeam.materialId)
                 }
+
                 onMaterialChange={(mid) =>
                   onSelectedBeamSection(
                     selectedBeam.section ?? solidRodFromArea(selectedBeam.area),
@@ -311,4 +328,116 @@ export function Sidebar({
       </div>
     </aside>
   );
+}
+
+function HealthPanel({
+  nodes,
+  beams,
+  result,
+  ai,
+  audit,
+  onRunSolver,
+  onFocusBeams,
+  onFocusNodes,
+}: {
+  nodes: Node[];
+  beams: Beam[];
+  result: FEAResult | null;
+  ai: AIAnalysis;
+  audit: StructureAudit;
+  onRunSolver: () => void;
+  onFocusBeams: (ids: string[]) => void;
+  onFocusNodes: (ids: string[]) => void;
+}) {
+  const geometry = audit.errors === 0 ? 25 : 0;
+  const analysis = result?.success ? 25 : 0;
+  const safety = result?.success
+    ? Math.max(0, Math.round(25 * Math.min(1, 1 / Math.max(result.maxSafetyRatio, 0.01))))
+    : 0;
+  const insight = result?.success && ai.bucklingBeamIds.length === 0 ? 25 : result?.success ? 15 : 0;
+  const score = geometry + analysis + safety + insight;
+  const tone = score >= 85 ? 'text-pass' : score >= 55 ? 'text-warn' : 'text-accent';
+  const nextIssue = audit.issues.find((issue) => issue.severity === 'error') ?? audit.issues[0];
+
+  return (
+    <>
+      <section className="rounded-xl border border-accent/25 bg-gradient-to-br from-accent/15 to-surface-800/50 p-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Design health</p>
+            <h2 className="mt-1 text-lg font-semibold text-surface-100">Readiness score</h2>
+          </div>
+          <Gauge size={20} className={tone} />
+        </div>
+        <div className="mt-4 flex items-end gap-2">
+          <span className={`font-mono text-4xl font-semibold ${tone}`}>{score}</span>
+          <span className="mb-1 text-xs text-surface-500">/ 100</span>
+        </div>
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-700">
+          <div className={`h-full rounded-full transition-all duration-500 ${score >= 85 ? 'bg-pass' : score >= 55 ? 'bg-warn' : 'bg-accent'}`} style={{ width: `${score}%` }} />
+        </div>
+        <p className="mt-3 text-xs leading-5 text-surface-400">
+          {score >= 85 ? 'Ready to explain, compare, or present this design.' : 'Complete the checks below to make this design review-ready.'}
+        </p>
+      </section>
+
+      <section className="space-y-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-surface-400">Readiness checks</h3>
+        <HealthCheck done={geometry === 25} label="Geometry audit" detail={audit.errors ? `${audit.errors} error(s) need attention` : 'No blocking geometry errors'} />
+        <HealthCheck done={analysis === 25} label="FEA analysis" detail={result?.success ? 'Solver completed successfully' : 'Run the solver to unlock results'} />
+        <HealthCheck done={safety >= 20} label="Safety margin" detail={result?.success ? `Peak utilization ${(result.maxSafetyRatio * 100).toFixed(0)}%` : 'Waiting for analysis'} />
+        <HealthCheck done={insight === 25} label="Engineering insight" detail={ai.bucklingBeamIds.length ? `${ai.bucklingBeamIds.length} buckling risk(s) detected` : 'No buckling risks flagged'} />
+      </section>
+
+      {nextIssue && (
+        <section className="rounded-lg border border-warn/30 bg-warn/10 p-3">
+          <div className="flex gap-2">
+            <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warn" />
+            <div>
+              <h3 className="text-xs font-semibold text-warn">Next best action</h3>
+              <p className="mt-1 text-[11px] leading-5 text-surface-300">{nextIssue.message}</p>
+              {(nextIssue.beamIds || nextIssue.nodeIds) && (
+                <button
+                  type="button"
+                  onClick={() => nextIssue.beamIds ? onFocusBeams(nextIssue.beamIds) : onFocusNodes(nextIssue.nodeIds ?? [])}
+                  className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-accent hover:text-teal-300"
+                >
+                  Focus affected geometry <ArrowRight size={12} />
+                </button>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className="grid grid-cols-2 gap-2">
+        <Metric label="Nodes" value={String(nodes.length)} />
+        <Metric label="Members" value={String(beams.length)} />
+        <Metric label="Issues" value={String(audit.errors + audit.warnings)} />
+        <Metric label="Buckling flags" value={String(ai.bucklingBeamIds.length)} />
+      </section>
+
+      {!result?.success && (
+        <button type="button" onClick={onRunSolver} className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2.5 text-xs font-semibold text-surface-950 hover:bg-teal-300">
+          <Gauge size={14} /> Run analysis now
+        </button>
+      )}
+    </>
+  );
+}
+
+function HealthCheck({ done, label, detail }: { done: boolean; label: string; detail: string }) {
+  return (
+    <div className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 ${done ? 'border-pass/25 bg-pass/5' : 'border-surface-700 bg-surface-800/50'}`}>
+      {done ? <CheckCircle2 size={15} className="text-pass" /> : <XCircle size={15} className="text-surface-600" />}
+      <div className="min-w-0">
+        <div className={`text-xs font-medium ${done ? 'text-pass' : 'text-surface-200'}`}>{label}</div>
+        <div className="truncate text-[10px] text-surface-500">{detail}</div>
+      </div>
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-lg border border-surface-700 bg-surface-800/50 p-2.5"><div className="text-[10px] uppercase tracking-wide text-surface-500">{label}</div><div className="mt-1 font-mono text-lg text-surface-100">{value}</div></div>;
 }

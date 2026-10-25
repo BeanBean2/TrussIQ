@@ -766,6 +766,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
             setHighlightNodeIds(ids);
             setSelectedNodeId(ids[0] ?? null);
           }}
+          onRunSolver={runSolver}
           audit={audit}
         />}
       </div>
