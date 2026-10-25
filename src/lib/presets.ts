@@ -224,11 +224,40 @@ export function createCantileverArm(): StructureState {
   return { nodes, beams, materialId, defaultArea: area };
 }
 
+/** Roof Truss — a compact roof frame with a central ridge and distributed roof load. */
+export function createRoofTruss(): StructureState {
+  const materialId = DEFAULT_MATERIAL_ID;
+  const area = DEFAULT_AREA;
+  const span = 140;
+  const nodes = makeNodes([
+    { x: OX, y: OY, support: 'pin' },
+    { x: OX + span, y: OY },
+    { x: OX + 2 * span, y: OY },
+    { x: OX + 3 * span, y: OY, support: 'rollerY' },
+    { x: OX + span, y: OY - 95 },
+    { x: OX + 2 * span, y: OY - 95 },
+  ]);
+  nodes[1].fy = 2200;
+  nodes[2].fy = 2200;
+
+  const beams = makeBeams(
+    [
+      [0, 1], [1, 2], [2, 3],
+      [0, 4], [4, 5], [5, 3],
+      [1, 4], [2, 5], [1, 5],
+    ],
+    materialId,
+    area,
+  );
+  return { nodes, beams, materialId, defaultArea: area };
+}
+
 export const PRESET_LOADERS = {
   howe: { label: 'Howe Truss', create: createHoweTruss },
   pratt: { label: 'Pratt Truss', create: createPrattTruss },
   warren: { label: 'Warren Truss', create: createWarrenTruss },
   cantilever: { label: 'Cantilever Arm (Robotics)', create: createCantileverArm },
+  roof: { label: 'Roof Truss (Distributed Load)', create: createRoofTruss },
 } as const;
 
 export type PresetKey = keyof typeof PRESET_LOADERS;

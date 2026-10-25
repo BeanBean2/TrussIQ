@@ -24,6 +24,12 @@ export const DEFAULT_WIND: WindParams = {
   dragScale: 0.35, // N / (m/s)²  classroom scale
 };
 
+export const STORM_WIND: WindParams = {
+  ...DEFAULT_WIND,
+  v0: 42,
+  dragScale: 0.45,
+};
+
 export const DEFAULT_SEISMIC: SeismicParams = {
   amplitude: 2.5, // m/s² (~0.25 g)
   omega: 8, // rad/s ≈ 1.27 Hz

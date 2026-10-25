@@ -58,6 +58,7 @@ interface TopBarProps {
   onRedo: () => void;
   onOpenTutorial: () => void;
   onDynamicsMode: (m: DynamicsMode) => void;
+  onWindProfile: (profile: 'standard' | 'storm') => void;
   onOpenCollapse: () => void;
   onOpenAR: () => void;
   onOpenCompare: () => void;
@@ -103,6 +104,7 @@ export function TopBar({
   onRedo,
   onOpenTutorial,
   onDynamicsMode,
+  onWindProfile,
   onOpenCollapse,
   onOpenAR,
   onOpenCompare,
@@ -264,11 +266,11 @@ export function TopBar({
             <div role="menu" className="dropdown-enter absolute left-0 top-full z-20 mt-2 w-52 overflow-hidden rounded-xl border border-surface-600/80 bg-surface-800/95 p-1.5 shadow-2xl shadow-black/30 backdrop-blur-xl">
               {(
                 [
-                  ['none', 'Static only'],
-                  ['wind', 'Wind shear'],
-                  ['seismic', 'Seismic sweep'],
+                  ['none', 'Static only', 'Gravity and applied loads'],
+                  ['wind', 'Wind shear', 'Standard wind · 25 m/s'],
+                  ['seismic', 'Seismic sweep', 'Harmonic ground motion · 0.25 g'],
                 ] as const
-              ).map(([id, label]) => (
+              ).map(([id, label, detail]) => (
                 <button
                   key={id}
                   type="button"
@@ -283,9 +285,23 @@ export function TopBar({
                     setDynOpen(false);
                   }}
                 >
-                  {label}
+                  <span className="block">{label}</span>
+                  <span className="mt-0.5 block text-[10px] text-surface-500">{detail}</span>
                 </button>
               ))}
+              <div className="my-1 border-t border-surface-700" />
+              <button
+                type="button"
+                role="menuitem"
+                className="block w-full rounded-lg px-3 py-2.5 text-left text-xs text-surface-200 transition-colors hover:bg-warn/10 hover:text-warn"
+                onClick={() => {
+                  onWindProfile('storm');
+                  setDynOpen(false);
+                }}
+              >
+                <span className="block">Storm wind test</span>
+                <span className="mt-0.5 block text-[10px] text-surface-500">Severe wind · 42 m/s</span>
+              </button>
             </div>
           </>
         )}

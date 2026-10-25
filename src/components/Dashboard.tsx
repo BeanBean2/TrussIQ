@@ -7,6 +7,7 @@ import {
   applyDynamics,
   DEFAULT_SEISMIC,
   DEFAULT_WIND,
+  STORM_WIND,
 } from '../lib/dynamicsEngine';
 import { solveTruss } from '../lib/feaEngine';
 import { buildFormulaBreakdown } from '../lib/formulaInspector';
@@ -113,7 +114,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
   );
 
   const [dynamicsMode, setDynamicsMode] = useState<DynamicsMode>('none');
-  const [wind] = useState<WindParams>(DEFAULT_WIND);
+  const [wind, setWind] = useState<WindParams>(DEFAULT_WIND);
   const [seismic, setSeismic] = useState<SeismicParams>(DEFAULT_SEISMIC);
 
   const [theme, setTheme] = useState<ThemeMode>(() => {
@@ -597,6 +598,10 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
           setDynamicsMode(m);
           if (m === 'none') setShowDeflection(false);
           if (m === 'seismic') setSeismic((s) => ({ ...s, time: 0 }));
+        }}
+        onWindProfile={(profile) => {
+          setWind(profile === 'storm' ? STORM_WIND : DEFAULT_WIND);
+          setDynamicsMode('wind');
         }}
         onOpenCollapse={() => setShowCollapse(true)}
         onOpenAR={() => setShowAR(true)}
