@@ -153,7 +153,7 @@ export function TopBar({
   }, []);
 
   return (
-    <header ref={barRef} className="relative flex h-14 shrink-0 items-center gap-1.5 overflow-x-auto border-b border-surface-700/80 bg-surface-900/95 px-2 shadow-[0_8px_30px_rgba(0,0,0,0.12)] backdrop-blur-xl">
+    <header ref={barRef} className="relative flex h-14 min-w-0 shrink-0 items-center gap-1.5 overflow-visible border-b border-surface-700/80 bg-surface-900/95 px-2 shadow-[0_8px_30px_rgba(0,0,0,0.12)] backdrop-blur-xl">
       <button type="button" onClick={onOpenHome} title="Back to home" className="group flex shrink-0 items-center gap-2 border-r border-surface-700 pr-2 text-left">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/20 text-sm font-bold text-accent transition group-hover:bg-accent group-hover:text-surface-950">
           IQ
