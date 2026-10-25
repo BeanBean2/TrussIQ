@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { buildTrussScene, downloadTrussGLB } from '../lib/gltfExport';
+import { getMaterial } from '../lib/materials';
 import type { Beam, Node } from '../lib/types';
 
 interface ARViewerProps {
@@ -20,6 +21,7 @@ export function ARViewer({ nodes, beams, onClose }: ARViewerProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const materialLegend = [...new Set(beams.map((beam) => beam.materialId))].map((id) => getMaterial(id));
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -155,6 +157,20 @@ export function ARViewer({ nodes, beams, onClose }: ARViewerProps) {
             </div>
           </div>
         )}
+        <div className="pointer-events-none absolute right-3 top-3 flex max-w-[min(18rem,calc(100%-1.5rem))] flex-wrap justify-end gap-1.5">
+          {materialLegend.map((material) => (
+            <span
+              key={material.id}
+              className="inline-flex items-center gap-1.5 rounded-full bg-surface-900/85 px-2.5 py-1 text-[10px] text-surface-200 shadow-lg"
+            >
+              <span
+                className="h-2.5 w-2.5 rounded-full border border-white/30"
+                style={{ backgroundColor: material.color }}
+              />
+              {material.name}
+            </span>
+          ))}
+        </div>
         <div className="pointer-events-none absolute bottom-3 left-3 flex items-center gap-2 rounded-md bg-surface-900/80 px-2.5 py-1.5 text-[10px] text-surface-400">
           <RotateCcw size={12} /> Drag to orbit · Scroll to zoom
         </div>

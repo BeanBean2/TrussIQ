@@ -3,9 +3,45 @@
  */
 
 import * as THREE from 'three';
-import type { Beam, Node } from './types';
+import { getMaterial } from './materials';
+import type { Beam, Material, Node } from './types';
 
 const DEPTH = 40; // mm extrusion half-depth for visual thickness
+
+interface MaterialAppearance {
+  color: number;
+  metalness: number;
+  roughness: number;
+  emissive?: number;
+  emissiveIntensity?: number;
+}
+
+function materialAppearance(material: Material): MaterialAppearance {
+  switch (material.id) {
+    case 'al6061':
+      return { color: 0xcbd5e1, metalness: 0.85, roughness: 0.2 };
+    case 'pla':
+      return {
+        color: 0x2dd4bf,
+        metalness: 0.05,
+        roughness: 0.38,
+        emissive: 0x064e3b,
+        emissiveIntensity: 0.12,
+      };
+    case 'cfiber':
+      return { color: 0x172033, metalness: 0.7, roughness: 0.22 };
+    case 'titanium':
+      return { color: 0xc4b5fd, metalness: 0.92, roughness: 0.16 };
+    case 'steel':
+    default:
+      return { color: 0x64748b, metalness: 0.78, roughness: 0.28 };
+  }
+}
+
+function createBeamMaterial(materialId: string): THREE.MeshStandardMaterial {
+  const appearance = materialAppearance(getMaterial(materialId));
+  return new THREE.MeshStandardMaterial(appearance);
+}
 
 export function buildTrussScene(nodes: Node[], beams: Beam[]): THREE.Group {
   const front = new THREE.Group();
@@ -23,11 +59,6 @@ export function buildTrussScene(nodes: Node[], beams: Beam[]): THREE.Group {
   cx /= Math.max(nodes.length, 1);
   cy /= Math.max(nodes.length, 1);
 
-  const beamMaterial = new THREE.MeshStandardMaterial({
-    color: 0x14b8a6,
-    metalness: 0.55,
-    roughness: 0.3,
-  });
   const jointMaterial = new THREE.MeshStandardMaterial({
     color: 0xf8fafc,
     metalness: 0.25,
@@ -49,10 +80,8 @@ export function buildTrussScene(nodes: Node[], beams: Beam[]): THREE.Group {
     if (len < 1e-6) return;
 
     const radius = Math.max(Math.sqrt(b.area / Math.PI), 2.5);
-    const mesh = new THREE.Mesh(
-      new THREE.CylinderGeometry(radius, radius, len, 12),
-      beamMaterial,
-    );
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, len, 12), createBeamMaterial(b.materialId));
+    mesh.userData.materialId = b.materialId;
     mesh.position.set((ax + bx) / 2, (ay + by) / 2, z);
     mesh.quaternion.setFromUnitVectors(
       new THREE.Vector3(0, 1, 0),
@@ -83,8 +112,8 @@ export function buildTrussScene(nodes: Node[], beams: Beam[]): THREE.Group {
   links.name = 'TrussIQ_JointConnectors';
   const linkMaterial = new THREE.MeshStandardMaterial({
     color: 0x64748b,
-    metalness: 0.35,
-    roughness: 0.4,
+    metalness: 0.5,
+    roughness: 0.32,
   });
   for (const n of nodes) {
     const geom = new THREE.CylinderGeometry(3, 3, DEPTH, 8);
