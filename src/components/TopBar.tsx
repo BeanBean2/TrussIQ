@@ -3,6 +3,7 @@ import {
   Box,
   ChevronDown,
   Columns2,
+  ClipboardList,
   Command,
   Download,
   FileJson,
@@ -65,6 +66,7 @@ interface TopBarProps {
   onOpenMission: () => void;
   onOpenCollaboration: () => void;
   onOpenCommand: () => void;
+  onOpenBrief: () => void;
   onOpenHome: () => void;
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
@@ -108,6 +110,7 @@ export function TopBar({
   onOpenMission,
   onOpenCollaboration,
   onOpenCommand,
+  onOpenBrief,
   onOpenHome,
   sidebarOpen,
   onToggleSidebar,
@@ -377,6 +380,17 @@ export function TopBar({
       >
         <Command size={13} />
         <span className="hidden 2xl:inline">Command</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={onOpenBrief}
+        title="Edit project brief and presentation context"
+        aria-label="Open project brief"
+        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-surface-700 px-2 py-2 text-xs text-surface-300 hover:border-accent/40 hover:text-accent"
+      >
+        <ClipboardList size={13} />
+        <span className="hidden 2xl:inline">Brief</span>
       </button>
 
       <button

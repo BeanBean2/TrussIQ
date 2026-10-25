@@ -42,6 +42,7 @@ import { DemoMode } from './DemoMode';
 import { MissionMode } from './MissionMode';
 import { CollaborationCenter } from './CollaborationCenter';
 import { CommandPalette } from './CommandPalette';
+import { ProjectBrief, type ProjectBriefData } from './ProjectBrief';
 import { ForceModal } from './ForceModal';
 import { FormulaInspector } from './FormulaInspector';
 import { ShortcutsModal } from './ShortcutsModal';
@@ -101,6 +102,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
   const [showMission, setShowMission] = useState(false);
   const [showCollaboration, setShowCollaboration] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showBrief, setShowBrief] = useState(false);
   const [draftStatus, setDraftStatus] = useState('Preparing workspace');
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -304,6 +306,10 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
         setHighlightBeamIds([]);
         setHighlightNodeIds([]);
         setPresentationMode(false);
+        setShowMission(false);
+        setShowCollaboration(false);
+        setShowCommandPalette(false);
+        setShowBrief(false);
       }
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedNodeId) {
@@ -598,6 +604,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
         onOpenMission={() => setShowMission(true)}
         onOpenCollaboration={() => setShowCollaboration(true)}
         onOpenCommand={() => setShowCommandPalette(true)}
+        onOpenBrief={() => setShowBrief(true)}
         onOpenHome={onOpenHome ?? (() => undefined)}
         sidebarOpen={sidebarOpen}
         onToggleSidebar={() => setSidebarOpen((open) => !open)}
@@ -853,6 +860,20 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
             document.querySelector<HTMLButtonElement>('[aria-label="Open export and import menu"]')?.click();
           }}
           onClear={clearAll}
+          onOpenBrief={() => setShowBrief(true)}
+        />
+      )}
+      {showBrief && (
+        <ProjectBrief
+          onClose={() => setShowBrief(false)}
+          onExport={(brief: ProjectBriefData) => {
+            const url = URL.createObjectURL(new Blob([JSON.stringify(brief, null, 2)], { type: 'application/json' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${brief.title.replace(/[^\w-]+/g, '_') || 'trussiq-brief'}.json`;
+            link.click();
+            URL.revokeObjectURL(url);
+          }}
         />
       )}
       <Suspense fallback={null}>

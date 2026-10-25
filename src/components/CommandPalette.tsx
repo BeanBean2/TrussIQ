@@ -3,6 +3,7 @@ import {
   Box,
   BrainCircuit,
   CheckCircle2,
+  ClipboardList,
   Download,
   Flag,
   Gauge,
@@ -33,6 +34,7 @@ interface CommandPaletteProps {
   onOpenShortcuts: () => void;
   onExport: () => void;
   onClear: () => void;
+  onOpenBrief: () => void;
 }
 
 interface Command {
@@ -59,6 +61,7 @@ export function CommandPalette({
   onOpenShortcuts,
   onExport,
   onClear,
+  onOpenBrief,
 }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
@@ -82,8 +85,9 @@ export function CommandPalette({
       { id: 'ar', label: 'Open 3D viewer', description: 'Inspect and export the model in 3D', group: 'Explore', icon: <Box size={15} />, run: onOpenAR },
       { id: 'export', label: 'Export design report', description: 'Open the export and reporting menu', group: 'Files', icon: <Download size={15} />, run: onExport },
       { id: 'clear', label: 'Clear current design', description: 'Remove all nodes and members', group: 'Files', icon: <X size={15} />, run: onClear },
+      { id: 'brief', label: 'Edit project brief', description: 'Capture the objective, constraints, and story behind the design', group: 'Review', icon: <ClipboardList size={15} />, run: onOpenBrief },
     ],
-    [onClear, onDynamics, onExport, onLoadPreset, onOpenAR, onOpenCollaboration, onOpenCollapse, onOpenCompare, onOpenMission, onOpenPresentation, onOpenShortcuts, onOpenTutorial, onRunSolver],
+    [onClear, onDynamics, onExport, onLoadPreset, onOpenAR, onOpenBrief, onOpenCollaboration, onOpenCollapse, onOpenCompare, onOpenMission, onOpenPresentation, onOpenShortcuts, onOpenTutorial, onRunSolver],
   );
   const filtered = commands.filter((command) => `${command.label} ${command.description} ${command.group}`.toLowerCase().includes(query.toLowerCase()));
 
