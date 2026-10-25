@@ -3,7 +3,6 @@
  */
 
 import * as THREE from 'three';
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import type { Beam, Node } from './types';
 
 const DEPTH = 40; // mm extrusion half-depth for visual thickness
@@ -104,6 +103,7 @@ export async function downloadTrussGLB(
   beams: Beam[],
   filename = 'trussiq_bridge.glb',
 ): Promise<void> {
+  const { GLTFExporter } = await import('three/examples/jsm/exporters/GLTFExporter.js');
   const scene = new THREE.Scene();
   scene.add(buildTrussScene(nodes, beams));
   const light = new THREE.AmbientLight(0xffffff, 1);
