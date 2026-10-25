@@ -31,6 +31,7 @@ interface CanvasEditorProps {
   onSelectNode: (id: string | null) => void;
   onSelectBeam: (id: string | null) => void;
   onPlaceNode: (x: number, y: number) => void;
+  onMoveNode: (id: string, x: number, y: number) => void;
   onBeamClickNode: (nodeId: string) => void;
   onForceNode: (nodeId: string) => void;
   onCycleSupport: (nodeId: string) => void;
@@ -55,7 +56,10 @@ export function CanvasEditor({
   canvasRefCallback,
   onSelectNode,
   onSelectBeam,
+  onMoveNode,
   onPlaceNode,
+
+
   onBeamClickNode,
   onForceNode,
   onCycleSupport,
@@ -67,6 +71,7 @@ export function CanvasEditor({
   const mouseRef = useRef<{ x: number; y: number } | null>(null);
   const animRef = useRef(0);
   const dashOffsetRef = useRef(0);
+  const dragRef = useRef<{ nodeId: string; x: number; y: number; startX: number; startY: number; offsetX: number; offsetY: number; moved: boolean } | null>(null);
 
   useEffect(() => {
     canvasRefCallback?.(canvasRef.current);
@@ -131,6 +136,8 @@ export function CanvasEditor({
 
   const getDisplaced = useCallback(
     (node: Node): { x: number; y: number } => {
+      const drag = dragRef.current;
+      if (drag?.nodeId === node.id) return { x: drag.x, y: drag.y };
       if (!showDeflection || !result?.success) return { x: node.x, y: node.y };
       const d = result.displacements.find((dd) => dd.nodeId === node.id);
       if (!d) return { x: node.x, y: node.y };
@@ -410,9 +417,56 @@ export function CanvasEditor({
     }
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const { x, y } = getWorldPos(e);
+    const drag = dragRef.current;
+    if (drag && tool === 'select') {
+      const nextX = snap(x + drag.offsetX);
+      const nextY = snap(y + drag.offsetY);
+      if (nextX !== drag.x || nextY !== drag.y) {
+        dragRef.current = {
+          ...drag,
+          x: nextX,
+          y: nextY,
+          moved: nextX !== drag.startX || nextY !== drag.startY,
+        };
+      }
+      e.currentTarget.style.cursor = 'grabbing';
+    } else {
+      e.currentTarget.style.cursor =
+        tool === 'select' && findNodeAt(x, y) ? 'grab' : 'default';
+    }
     mouseRef.current = { x, y };
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+      if (tool !== 'select') return;
+      const { x, y } = getWorldPos(e);
+      const node = findNodeAt(x, y);
+      if (!node) return;
+      dragRef.current = {
+        nodeId: node.id,
+        x: node.x,
+        y: node.y,
+        startX: node.x,
+        startY: node.y,
+        offsetX: node.x - x,
+        offsetY: node.y - y,
+        moved: false,
+  };
+      e.currentTarget.setPointerCapture(e.pointerId);
+      e.currentTarget.style.cursor = 'grabbing';
+    };
+
+    const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+      const drag = dragRef.current;
+      if (!drag) return;
+      dragRef.current = null;
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+      e.currentTarget.style.cursor = 'default';
+      if (drag.moved) onMoveNode(drag.nodeId, drag.x, drag.y);
   };
 
   const handleMouseLeave = () => {
@@ -438,6 +492,9 @@ export function CanvasEditor({
         className="absolute inset-0"
         style={{ cursor }}
         onClick={handleClick}
+        onPointerDown={handlePointerDown}
+onPointerUp={handlePointerUp}
+onPointerCancel={handlePointerUp}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
         onContextMenu={(e) => {

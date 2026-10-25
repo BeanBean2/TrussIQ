@@ -3,6 +3,7 @@ import {
   Box,
   ChevronDown,
   Columns2,
+  Command,
   Download,
   FileJson,
   HelpCircle,
@@ -63,6 +64,7 @@ interface TopBarProps {
   onOpenPresentation: () => void;
   onOpenMission: () => void;
   onOpenCollaboration: () => void;
+  onOpenCommand: () => void;
   onOpenHome: () => void;
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
@@ -105,6 +107,7 @@ export function TopBar({
   onOpenPresentation,
   onOpenMission,
   onOpenCollaboration,
+  onOpenCommand,
   onOpenHome,
   sidebarOpen,
   onToggleSidebar,
@@ -363,6 +366,17 @@ export function TopBar({
         className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-surface-700 px-2 py-2 text-xs text-surface-300 hover:text-accent"
       >
         <BookOpen size={13} />
+      </button>
+
+      <button
+        type="button"
+        onClick={onOpenCommand}
+        title="Search all tools and actions (Ctrl+K)"
+        aria-label="Open command palette"
+        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-accent/30 bg-accent/5 px-2 py-2 text-xs text-accent hover:border-accent/60 hover:bg-accent/10"
+      >
+        <Command size={13} />
+        <span className="hidden 2xl:inline">Command</span>
       </button>
 
       <button

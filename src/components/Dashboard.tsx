@@ -41,6 +41,7 @@ import { CanvasEditor } from './CanvasEditor';
 import { DemoMode } from './DemoMode';
 import { MissionMode } from './MissionMode';
 import { CollaborationCenter } from './CollaborationCenter';
+import { CommandPalette } from './CommandPalette';
 import { ForceModal } from './ForceModal';
 import { FormulaInspector } from './FormulaInspector';
 import { ShortcutsModal } from './ShortcutsModal';
@@ -99,6 +100,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
   const [presentationMode, setPresentationMode] = useState(false);
   const [showMission, setShowMission] = useState(false);
   const [showCollaboration, setShowCollaboration] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [draftStatus, setDraftStatus] = useState('Preparing workspace');
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -157,6 +159,17 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
   useEffect(() => {
     if (initialDemo) setShowDemo(true);
   }, [initialDemo]);
+
+  useEffect(() => {
+    const onCommandShortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setShowCommandPalette(true);
+      }
+    };
+    window.addEventListener('keydown', onCommandShortcut);
+    return () => window.removeEventListener('keydown', onCommandShortcut);
+  }, []);
 
   // Seismic real-time sweep — advance time & re-solve while active (~30 Hz)
   useEffect(() => {
@@ -584,6 +597,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
         onOpenPresentation={() => setPresentationMode(true)}
         onOpenMission={() => setShowMission(true)}
         onOpenCollaboration={() => setShowCollaboration(true)}
+        onOpenCommand={() => setShowCommandPalette(true)}
         onOpenHome={onOpenHome ?? (() => undefined)}
         sidebarOpen={sidebarOpen}
         onToggleSidebar={() => setSidebarOpen((open) => !open)}
@@ -646,6 +660,15 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
             onSelectNode={setSelectedNodeId}
             onSelectBeam={setSelectedBeamId}
             onPlaceNode={placeNode}
+            onMoveNode={(id, x, y) => {
+              commit((prev) => ({
+                ...prev,
+                nodes: prev.nodes.map((node) =>
+                  node.id === id ? { ...node, x, y } : node,
+                ),
+              }));
+              invalidate();
+            }}
             onBeamClickNode={beamClickNode}
             onForceNode={(id) => {
               const n = nodes.find((nn) => nn.id === id);
@@ -795,6 +818,30 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
             replace(snapshot);
             invalidate();
           }}
+        />
+      )}
+      {showCommandPalette && (
+        <CommandPalette
+          onClose={() => setShowCommandPalette(false)}
+          onRunSolver={runSolver}
+          onLoadPreset={loadPreset}
+          onDynamics={(mode) => {
+            setDynamicsMode(mode);
+            if (mode === 'none') setShowDeflection(false);
+            if (mode === 'seismic') setSeismic((current) => ({ ...current, time: 0 }));
+          }}
+          onOpenTutorial={() => setShowTutorial(true)}
+          onOpenMission={() => setShowMission(true)}
+          onOpenCollaboration={() => setShowCollaboration(true)}
+          onOpenPresentation={() => setPresentationMode(true)}
+          onOpenCompare={() => setShowCompare(true)}
+          onOpenCollapse={() => setShowCollapse(true)}
+          onOpenAR={() => setShowAR(true)}
+          onOpenShortcuts={() => setShowShortcuts(true)}
+          onExport={() => {
+            document.querySelector<HTMLButtonElement>('[aria-label="Open export and import menu"]')?.click();
+          }}
+          onClear={clearAll}
         />
       )}
       <Suspense fallback={null}>
