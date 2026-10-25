@@ -51,7 +51,7 @@ interface TopBarProps {
   draftStatus: string;
   onSaveDraft: () => void;
   onToggleTheme: () => void;
-  onUndo: () => void;
+    onUndo: () => void;
   onRedo: () => void;
   onOpenTutorial: () => void;
   onDynamicsMode: (m: DynamicsMode) => void;
@@ -193,6 +193,7 @@ export function TopBar({
           }}
           aria-expanded={presetsOpen}
           aria-haspopup="menu"
+          data-tooltip="Load a proven truss configuration"
           className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-2 text-xs transition-all ${
             presetsOpen
               ? 'border-accent/50 bg-accent/10 text-accent shadow-[0_0_18px_rgba(14,165,164,0.12)]'
@@ -235,6 +236,7 @@ export function TopBar({
           }}
           aria-expanded={dynOpen}
           aria-haspopup="menu"
+          data-tooltip="Apply wind or seismic loading"
           className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-2 text-xs transition-all ${
             dynamicsMode !== 'none'
               ? 'border-warn/50 bg-warn/15 text-warn'
@@ -493,6 +495,7 @@ export function TopBar({
             aria-label="Open export and import menu"
             aria-expanded={exportOpen}
             aria-haspopup="menu"
+            data-tooltip="Save, import, copy, or report your design"
             className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-2 text-xs transition-all ${
               exportOpen
                 ? 'border-accent/50 bg-accent/10 text-accent shadow-[0_0_18px_rgba(14,165,164,0.12)]'

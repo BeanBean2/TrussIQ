@@ -187,6 +187,65 @@ input:focus-visible {
   outline-offset: 2px;
 }
 
+button[title],
+button[aria-label],
+[data-tooltip] {
+  position: relative;
+}
+
+button[title]::after,
+button[aria-label]::after,
+[data-tooltip]::after {
+  position: absolute;
+  top: calc(100% + 9px);
+  left: 50%;
+  z-index: 100;
+  width: max-content;
+  max-width: 18rem;
+  padding: 6px 9px;
+  border: 1px solid color-mix(in srgb, var(--iq-600) 80%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--iq-900) 94%, #000);
+  box-shadow: 0 10px 24px rgb(0 0 0 / 28%);
+  color: var(--iq-200);
+  content: attr(data-tooltip);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -3px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  white-space: normal;
+}
+
+button[title]:not([data-tooltip])::after {
+  content: attr(title);
+}
+
+button[aria-label]:not([title]):not([data-tooltip])::after {
+  content: attr(aria-label);
+}
+
+button[title]:hover::after,
+button[title]:focus-visible::after,
+button[aria-label]:hover::after,
+button[aria-label]:focus-visible::after,
+[data-tooltip]:hover::after,
+[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+@media (hover: none) {
+  button[title]::after,
+  button[aria-label]::after,
+  [data-tooltip]::after {
+    display: none;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
