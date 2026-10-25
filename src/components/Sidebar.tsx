@@ -24,6 +24,7 @@ interface SidebarProps {
   onAreaChange: (area: number) => void;
   onSelectedBeamArea: (area: number) => void;
   onSelectedBeamSection: (section: SectionParams, materialId: string) => void;
+  onSelectedNodeChange: (patch: Partial<Node>) => void;
   onOpenFormula: () => void;
   onFocusBeams: (ids: string[]) => void;
   onFocusNodes: (ids: string[]) => void;
@@ -46,6 +47,7 @@ export function Sidebar({
   onAreaChange,
   onSelectedBeamArea,
   onSelectedBeamSection,
+  onSelectedNodeChange,
   onOpenFormula,
   onFocusBeams,
   onFocusNodes,
@@ -168,14 +170,16 @@ export function Sidebar({
                   Selection
                 </h3>
                 {selectedNode && (
-                  <div className="font-mono text-[11px] text-surface-300">
-                    <div>Node {selectedNode.id}</div>
-                    <div>
-                      ({selectedNode.x.toFixed(0)}, {selectedNode.y.toFixed(0)}) mm
+                  <div className="space-y-2 text-[11px] text-surface-300">
+                    <div className="font-mono">Node {selectedNode.id}</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <NodeNumberInput label="X (mm)" value={selectedNode.x} onChange={(value) => onSelectedNodeChange({ x: value })} />
+                      <NodeNumberInput label="Y (mm)" value={selectedNode.y} onChange={(value) => onSelectedNodeChange({ y: value })} />
+                      <NodeNumberInput label="Force X (N)" value={selectedNode.fx} onChange={(value) => onSelectedNodeChange({ fx: value })} />
+                      <NodeNumberInput label="Force Y (N)" value={selectedNode.fy} onChange={(value) => onSelectedNodeChange({ fy: value })} />
                     </div>
-                    <div>Support: {selectedNode.support}</div>
-                    <div>
-                      F = ({selectedNode.fx.toFixed(0)}, {selectedNode.fy.toFixed(0)}) N
+                    <div className="rounded-md border border-surface-700 bg-surface-900/50 px-2 py-1.5 font-mono text-[10px] text-surface-500">
+                      Support: <span className="text-surface-300">{selectedNode.support}</span>
                     </div>
                   </div>
                 )}
@@ -205,7 +209,6 @@ export function Sidebar({
                 onSectionChange={(section) =>
                   onSelectedBeamSection(section, selectedBeam.materialId)
                 }
-
                 onMaterialChange={(mid) =>
                   onSelectedBeamSection(
                     selectedBeam.section ?? solidRodFromArea(selectedBeam.area),
@@ -327,6 +330,31 @@ export function Sidebar({
         )}
       </div>
     </aside>
+  );
+}
+
+function NodeNumberInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="space-y-1">
+      <span className="block text-[10px] text-surface-500">{label}</span>
+      <input
+        type="number"
+        value={value}
+        onChange={(event) => {
+          const next = Number(event.target.value);
+          if (Number.isFinite(next)) onChange(next);
+        }}
+        className="w-full rounded-md border border-surface-700 bg-surface-900 px-2 py-1.5 font-mono text-[11px] text-surface-200 outline-none focus:border-accent"
+      />
+    </label>
   );
 }
 

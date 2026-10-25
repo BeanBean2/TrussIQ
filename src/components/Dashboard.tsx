@@ -757,6 +757,16 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
           onAreaChange={changeDefaultArea}
           onSelectedBeamArea={changeSelectedBeamArea}
           onSelectedBeamSection={changeSelectedBeamSection}
+          onSelectedNodeChange={(patch) => {
+            if (!selectedNodeId) return;
+            commit((prev) => ({
+              ...prev,
+              nodes: prev.nodes.map((node) =>
+                node.id === selectedNodeId ? { ...node, ...patch } : node,
+              ),
+            }));
+            invalidate();
+          }}
           onOpenFormula={openFormula}
           onFocusBeams={(ids) => {
             setHighlightBeamIds(ids);
