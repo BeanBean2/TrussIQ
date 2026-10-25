@@ -13,6 +13,8 @@ import {
 interface StartScreenProps {
   onOpenDemo: () => void;
   onStartBlank: () => void;
+  onResume: () => void;
+  hasSavedDesign: boolean;
 }
 
 const FEATURES = [
@@ -33,7 +35,12 @@ const FEATURES = [
   },
 ];
 
-export function StartScreen({ onOpenDemo, onStartBlank }: StartScreenProps) {
+export function StartScreen({
+  onOpenDemo,
+  onStartBlank,
+  onResume,
+  hasSavedDesign,
+}: StartScreenProps) {
   return (
     <main className="min-h-full overflow-y-auto bg-surface-950 text-surface-100">
       <div className="relative isolate overflow-hidden">
@@ -92,6 +99,17 @@ export function StartScreen({ onOpenDemo, onStartBlank }: StartScreenProps) {
                 Start from blank
               </button>
             </div>
+            {hasSavedDesign && (
+              <button
+                type="button"
+                onClick={onResume}
+                className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-accent transition hover:text-teal-300"
+              >
+                <Layers3 size={15} />
+                Resume your saved design
+                <ArrowRight size={14} />
+              </button>
+            )}
 
             <div className="mt-7 flex flex-wrap gap-x-5 gap-y-2 text-xs text-surface-400">
               {['No account required', 'Undoable experiments', 'Classroom friendly'].map((item) => (

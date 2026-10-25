@@ -17,6 +17,7 @@ Congressional App Challenge–ready **2D/3D Finite Element Analysis** lab for pi
 | Shortcuts | Press **?** |
 | Guided modeling + live analysis status | Start on the canvas / top-bar status |
 | Smooth collapse playback + reduced-motion support | **Collapse** / follows system accessibility settings |
+| Automatic local save + resume | Return to the start screen after a refresh |
 
 ## Quick start
 
