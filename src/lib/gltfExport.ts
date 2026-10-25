@@ -8,8 +8,8 @@ import type { Beam, Node } from './types';
 const DEPTH = 40; // mm extrusion half-depth for visual thickness
 
 export function buildTrussScene(nodes: Node[], beams: Beam[]): THREE.Group {
-  const group = new THREE.Group();
-  group.name = 'TrussIQ_Bridge';
+  const front = new THREE.Group();
+  front.name = 'TrussIQ_Bridge_Front';
 
   const nodeMap = new Map(nodes.map((n) => [n.id, n]));
 
@@ -23,76 +23,85 @@ export function buildTrussScene(nodes: Node[], beams: Beam[]): THREE.Group {
   cx /= Math.max(nodes.length, 1);
   cy /= Math.max(nodes.length, 1);
 
-  for (const b of beams) {
+  const beamMaterial = new THREE.MeshStandardMaterial({
+    color: 0x14b8a6,
+    metalness: 0.55,
+    roughness: 0.3,
+  });
+  const jointMaterial = new THREE.MeshStandardMaterial({
+    color: 0xf8fafc,
+    metalness: 0.25,
+    roughness: 0.25,
+  });
+
+  const addBeam = (parent: THREE.Group, b: Beam, z: number) => {
     const ni = nodeMap.get(b.nodeI);
     const nj = nodeMap.get(b.nodeJ);
-    if (!ni || !nj) continue;
+    if (!ni || !nj) return;
 
     const ax = ni.x - cx;
-    const ay = -(ni.y - cy); // flip Y for Three.js Y-up
+    const ay = -(ni.y - cy);
     const bx = nj.x - cx;
     const by = -(nj.y - cy);
-
     const dx = bx - ax;
     const dy = by - ay;
     const len = Math.hypot(dx, dy);
-    if (len < 1e-6) continue;
+    if (len < 1e-6) return;
 
-    const radius = Math.max(Math.sqrt(b.area / Math.PI), 2);
-    const geom = new THREE.CylinderGeometry(radius, radius, len, 10);
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x0ea5a4,
-      metalness: 0.4,
-      roughness: 0.45,
-    });
-    const mesh = new THREE.Mesh(geom, mat);
-    mesh.position.set((ax + bx) / 2, (ay + by) / 2, 0);
-    // Orient cylinder (default Y-axis) along member
-    const dir = new THREE.Vector3(dx, dy, 0).normalize();
-    const quat = new THREE.Quaternion().setFromUnitVectors(
+    const radius = Math.max(Math.sqrt(b.area / Math.PI), 2.5);
+    const mesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(radius, radius, len, 12),
+      beamMaterial,
+    );
+    mesh.position.set((ax + bx) / 2, (ay + by) / 2, z);
+    mesh.quaternion.setFromUnitVectors(
       new THREE.Vector3(0, 1, 0),
-      dir,
+      new THREE.Vector3(dx, dy, 0).normalize(),
     );
-    mesh.quaternion.copy(quat);
     mesh.name = b.id;
-    group.add(mesh);
-  }
+    parent.add(mesh);
+  };
 
-  for (const n of nodes) {
-    const sphere = new THREE.Mesh(
-      new THREE.SphereGeometry(6, 12, 12),
-      new THREE.MeshStandardMaterial({ color: 0xe2e8f0 }),
+  const addJoint = (parent: THREE.Group, n: Node, z: number) => {
+    const joint = new THREE.Mesh(
+      new THREE.SphereGeometry(7, 16, 12),
+      jointMaterial,
     );
-    sphere.position.set(n.x - cx, -(n.y - cy), 0);
-    sphere.name = n.id;
-    group.add(sphere);
+    joint.position.set(n.x - cx, -(n.y - cy), z);
+    joint.name = n.id;
+    parent.add(joint);
+  };
 
-    // Extrude depth hint — dual plane joints
-    const back = sphere.clone();
-    back.position.z = -DEPTH;
-    group.add(back);
-  }
+  for (const b of beams) addBeam(front, b, 0);
+  for (const n of nodes) addJoint(front, n, 0);
 
-  // Duplicate chords offset in Z for a simple 3D bridge extrusion
-  const clone = group.clone(true);
-  clone.position.z = -DEPTH;
-  clone.name = 'TrussIQ_Bridge_Back';
-  // Cross-links
+  const back = front.clone(true);
+  back.name = 'TrussIQ_Bridge_Back';
+  back.position.z = -DEPTH;
+
   const links = new THREE.Group();
+  links.name = 'TrussIQ_JointConnectors';
+  const linkMaterial = new THREE.MeshStandardMaterial({
+    color: 0x64748b,
+    metalness: 0.35,
+    roughness: 0.4,
+  });
   for (const n of nodes) {
-    const geom = new THREE.CylinderGeometry(2.5, 2.5, DEPTH, 6);
+    const geom = new THREE.CylinderGeometry(3, 3, DEPTH, 8);
     const mesh = new THREE.Mesh(
       geom,
-      new THREE.MeshStandardMaterial({ color: 0x64748b }),
+      linkMaterial,
     );
     mesh.position.set(n.x - cx, -(n.y - cy), -DEPTH / 2);
     mesh.rotation.x = Math.PI / 2;
+    mesh.name = `${n.id}_connector`;
     links.add(mesh);
   }
 
   const root = new THREE.Group();
-  root.add(group);
-  root.add(clone);
+  root.name = 'TrussIQ_Bridge';
+  root.add(front);
+  root.add(back);
   root.add(links);
   return root;
 }
