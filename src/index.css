@@ -230,6 +230,22 @@ input:focus-visible {
   animation: fade-in 0.25s ease-out;
 }
 
+.dropdown-enter {
+  transform-origin: top center;
+  animation: dropdown-enter 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes dropdown-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .animate-pulse-glow {
   animation: pulse-glow 1.4s ease-in-out infinite;
 }

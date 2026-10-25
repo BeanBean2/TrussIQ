@@ -25,7 +25,7 @@ import {
   Wind,
   Zap,
 } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { PRESET_LOADERS, type PresetKey } from '../lib/presets';
 import type { DynamicsMode, GridSize, ThemeMode } from '../lib/types';
 
@@ -116,9 +116,33 @@ export function TopBar({
   const [exportOpen, setExportOpen] = useState(false);
   const [dynOpen, setDynOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const barRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const closeMenus = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setPresetsOpen(false);
+        setExportOpen(false);
+        setDynOpen(false);
+      }
+    };
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!barRef.current?.contains(event.target as Node)) {
+        setPresetsOpen(false);
+        setExportOpen(false);
+        setDynOpen(false);
+      }
+    };
+    window.addEventListener('keydown', closeMenus);
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    return () => {
+      window.removeEventListener('keydown', closeMenus);
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+    };
+  }, []);
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-1.5 overflow-x-auto border-b border-surface-700 bg-surface-900 px-2">
+    <header ref={barRef} className="relative flex h-14 shrink-0 items-center gap-1.5 overflow-x-auto border-b border-surface-700/80 bg-surface-900/95 px-2 shadow-[0_8px_30px_rgba(0,0,0,0.12)] backdrop-blur-xl">
       <button type="button" onClick={onOpenHome} title="Back to home" className="group flex shrink-0 items-center gap-2 border-r border-surface-700 pr-2 text-left">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/20 text-sm font-bold text-accent transition group-hover:bg-accent group-hover:text-surface-950">
           IQ
@@ -167,19 +191,26 @@ export function TopBar({
             setExportOpen(false);
             setDynOpen(false);
           }}
-          className="inline-flex items-center gap-1 rounded-lg border border-surface-700 bg-surface-800 px-2 py-2 text-xs text-surface-200"
+          aria-expanded={presetsOpen}
+          aria-haspopup="menu"
+          className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-2 text-xs transition-all ${
+            presetsOpen
+              ? 'border-accent/50 bg-accent/10 text-accent shadow-[0_0_18px_rgba(14,165,164,0.12)]'
+              : 'border-surface-700 bg-surface-800/80 text-surface-200 hover:border-surface-500 hover:bg-surface-700/80'
+          }`}
         >
           Presets <ChevronDown size={12} />
         </button>
         {presetsOpen && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setPresetsOpen(false)} />
-            <div className="absolute left-0 top-full z-20 mt-1 w-52 overflow-hidden rounded-lg border border-surface-700 bg-surface-800 shadow-xl">
+            <div role="menu" className="dropdown-enter absolute left-0 top-full z-20 mt-2 w-56 overflow-hidden rounded-xl border border-surface-600/80 bg-surface-800/95 p-1.5 shadow-2xl shadow-black/30 backdrop-blur-xl">
               {(Object.keys(PRESET_LOADERS) as PresetKey[]).map((key) => (
                 <button
                   key={key}
                   type="button"
-                  className="block w-full px-3 py-2 text-left text-sm text-surface-200 hover:bg-surface-700"
+                  role="menuitem"
+                  className="block w-full rounded-lg px-3 py-2.5 text-left text-xs text-surface-200 transition-colors hover:bg-accent/10 hover:text-accent"
                   onClick={() => {
                     onLoadPreset(key);
                     setPresetsOpen(false);
@@ -202,10 +233,14 @@ export function TopBar({
             setPresetsOpen(false);
             setExportOpen(false);
           }}
-          className={`inline-flex items-center gap-1 rounded-lg border px-2 py-2 text-xs ${
+          aria-expanded={dynOpen}
+          aria-haspopup="menu"
+          className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-2 text-xs transition-all ${
             dynamicsMode !== 'none'
               ? 'border-warn/50 bg-warn/15 text-warn'
-              : 'border-surface-700 text-surface-300'
+              : dynOpen
+                ? 'border-accent/50 bg-accent/10 text-accent'
+                : 'border-surface-700 text-surface-300 hover:border-surface-500 hover:bg-surface-800'
           }`}
         >
           <Wind size={13} />
@@ -215,7 +250,7 @@ export function TopBar({
         {dynOpen && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setDynOpen(false)} />
-            <div className="absolute left-0 top-full z-20 mt-1 w-48 overflow-hidden rounded-lg border border-surface-700 bg-surface-800 shadow-xl">
+            <div role="menu" className="dropdown-enter absolute left-0 top-full z-20 mt-2 w-52 overflow-hidden rounded-xl border border-surface-600/80 bg-surface-800/95 p-1.5 shadow-2xl shadow-black/30 backdrop-blur-xl">
               {(
                 [
                   ['none', 'Static only'],
@@ -226,7 +261,12 @@ export function TopBar({
                 <button
                   key={id}
                   type="button"
-                  className="block w-full px-3 py-2 text-left text-sm text-surface-200 hover:bg-surface-700"
+                  role="menuitem"
+                  className={`block w-full rounded-lg px-3 py-2.5 text-left text-xs transition-colors ${
+                    dynamicsMode === id
+                      ? 'bg-accent/10 text-accent'
+                      : 'text-surface-200 hover:bg-accent/10 hover:text-accent'
+                  }`}
                   onClick={() => {
                     onDynamicsMode(id);
                     setDynOpen(false);
@@ -451,7 +491,13 @@ export function TopBar({
               setDynOpen(false);
             }}
             aria-label="Open export and import menu"
-            className="inline-flex items-center gap-1 rounded-lg border border-surface-700 bg-surface-800 px-2 py-2 text-xs text-surface-200"
+            aria-expanded={exportOpen}
+            aria-haspopup="menu"
+            className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-2 text-xs transition-all ${
+              exportOpen
+                ? 'border-accent/50 bg-accent/10 text-accent shadow-[0_0_18px_rgba(14,165,164,0.12)]'
+                : 'border-surface-700 bg-surface-800/80 text-surface-200 hover:border-surface-500 hover:bg-surface-700/80'
+            }`}
           >
             <Download size={13} />
             <ChevronDown size={12} />
@@ -459,10 +505,11 @@ export function TopBar({
           {exportOpen && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setExportOpen(false)} />
-              <div className="absolute right-0 top-full z-20 mt-1 w-56 overflow-hidden rounded-lg border border-surface-700 bg-surface-800 shadow-xl">
+              <div role="menu" className="dropdown-enter absolute right-0 top-full z-20 mt-2 w-60 overflow-hidden rounded-xl border border-surface-600/80 bg-surface-800/95 p-1.5 shadow-2xl shadow-black/30 backdrop-blur-xl">
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-surface-200 hover:bg-surface-700"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-xs text-surface-200 transition-colors hover:bg-accent/10 hover:text-accent"
                   onClick={() => {
                     onExportTruss();
                     setExportOpen(false);
@@ -472,7 +519,8 @@ export function TopBar({
                 </button>
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-surface-200 hover:bg-surface-700"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-xs text-surface-200 transition-colors hover:bg-accent/10 hover:text-accent"
                   onClick={() => {
                     onCopyTruss();
                     setExportOpen(false);
@@ -482,7 +530,8 @@ export function TopBar({
                 </button>
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-surface-200 hover:bg-surface-700"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-xs text-surface-200 transition-colors hover:bg-accent/10 hover:text-accent"
                   onClick={() => {
                     fileRef.current?.click();
                     setExportOpen(false);
@@ -492,7 +541,8 @@ export function TopBar({
                 </button>
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-surface-200 hover:bg-surface-700"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-xs text-surface-200 transition-colors hover:bg-accent/10 hover:text-accent"
                   onClick={() => {
                     onExportOfficialReport();
                     setExportOpen(false);
