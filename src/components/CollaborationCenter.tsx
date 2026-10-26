@@ -111,7 +111,24 @@ export function CollaborationCenter({
       setCopyStatus('copied');
       window.setTimeout(() => setCopyStatus(''), 1800);
     } catch {
-      setCopyStatus('error');
+      try {
+        const area = document.createElement('textarea');
+        area.value = shareCode;
+        area.setAttribute('readonly', '');
+        area.style.position = 'fixed';
+        area.style.left = '-9999px';
+        document.body.appendChild(area);
+        area.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(area);
+        if (!ok) throw new Error('Copy command failed');
+        setCopyStatus('copied');
+        window.setTimeout(() => setCopyStatus(''), 1800);
+      } catch {
+        window.prompt('Copy this review link:', shareCode);
+        setCopyStatus('error');
+        window.setTimeout(() => setCopyStatus(''), 2400);
+      }
     }
   };
   const downloadPacket = () => {

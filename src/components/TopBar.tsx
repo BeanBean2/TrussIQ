@@ -16,15 +16,19 @@ import {
   Trophy,
   LoaderCircle,
   Moon,
+  MoreHorizontal,
   Play,
   Redo2,
   Save,
+  PanelLeft,
   PanelRight,
   Sparkles,
   Sun,
   Trash2,
   Undo2,
   Upload,
+  Volume2,
+  VolumeX,
   Waves,
   Wind,
   Zap,
@@ -78,6 +82,8 @@ interface TopBarProps {
   onOpenHome: () => void;
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
+  toolbarOpen: boolean;
+  onToggleToolbar: () => void;
   uiScale: number;
   onUiScale: (scale: number) => void;
   soundsEnabled: boolean;
@@ -131,6 +137,12 @@ export function TopBar({
   onOpenHome,
   sidebarOpen,
   onToggleSidebar,
+  toolbarOpen,
+  onToggleToolbar,
+  uiScale,
+  onUiScale,
+  soundsEnabled,
+  onToggleSounds,
   nodeCount,
   beamCount,
   analysisLabel,
@@ -138,14 +150,17 @@ export function TopBar({
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [dynOpen, setDynOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const barRef = useRef<HTMLElement>(null);
   const presetsMenuRef = useRef<HTMLDivElement>(null);
   const dynamicsMenuRef = useRef<HTMLDivElement>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
   const [presetsPosition, setPresetsPosition] = useState({ top: 56, left: 8 });
   const [dynamicsPosition, setDynamicsPosition] = useState({ top: 56, left: 8 });
   const [exportPosition, setExportPosition] = useState({ top: 56, left: 8 });
+  const [morePosition, setMorePosition] = useState({ top: 56, left: 8 });
 
   const positionMenu = (event: React.MouseEvent<HTMLButtonElement>, width: number) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -156,28 +171,29 @@ export function TopBar({
     };
   };
 
-  const closeOnViewportChange = () => {
+  const closeAllMenus = () => {
     setPresetsOpen(false);
     setExportOpen(false);
     setDynOpen(false);
+    setMoreOpen(false);
+  };
+
+  const closeOnViewportChange = () => {
+    closeAllMenus();
   };
 
   useEffect(() => {
     const closeMenus = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setPresetsOpen(false);
-        setExportOpen(false);
-        setDynOpen(false);
-      }
+      if (event.key === 'Escape') closeAllMenus();
     };
     const closeOnOutsidePointer = (event: PointerEvent) => {
       const target = event.target as Node;
-      const insideMenu = presetsMenuRef.current?.contains(target) || dynamicsMenuRef.current?.contains(target) || exportMenuRef.current?.contains(target);
-      if (!barRef.current?.contains(target) && !insideMenu) {
-        setPresetsOpen(false);
-        setExportOpen(false);
-        setDynOpen(false);
-      }
+      const insideMenu =
+        presetsMenuRef.current?.contains(target) ||
+        dynamicsMenuRef.current?.contains(target) ||
+        exportMenuRef.current?.contains(target) ||
+        moreMenuRef.current?.contains(target);
+      if (!barRef.current?.contains(target) && !insideMenu) closeAllMenus();
     };
     window.addEventListener('keydown', closeMenus);
     window.addEventListener('resize', closeOnViewportChange);
@@ -189,19 +205,28 @@ export function TopBar({
     };
   }, []);
 
+  // When panels are tucked away, keep the top bar to one compact row so the canvas gains height.
+  const focusLayout = !sidebarOpen && !toolbarOpen;
+
   return (
-    <header ref={barRef} className="workspace-topbar relative z-40 flex h-auto min-h-14 min-w-0 flex-wrap items-center gap-1.5 overflow-visible border-b border-surface-700/80 bg-surface-900/95 px-2 py-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.12)] backdrop-blur-xl">
+    <header
+      ref={barRef}
+      data-focus-layout={focusLayout ? 'true' : 'false'}
+      className={`workspace-topbar relative z-40 flex h-14 min-h-14 min-w-0 flex-nowrap items-center gap-1 overflow-x-auto overflow-y-hidden border-b border-surface-700/80 bg-surface-900/95 px-2 shadow-[0_8px_30px_rgba(0,0,0,0.12)] backdrop-blur-xl ${
+        focusLayout ? 'workspace-topbar--focus gap-1 py-1' : 'gap-1.5 py-1.5'
+      }`}
+    >
       <button type="button" onClick={onOpenHome} title="Back to home" className="group flex shrink-0 items-center gap-2 border-r border-surface-700 pr-2 text-left">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/20 text-sm font-bold text-accent transition group-hover:bg-accent group-hover:text-surface-950">
           IQ
         </div>
-        <div className="hidden sm:block">
+        <div className={`hidden ${focusLayout ? '' : 'sm:block'}`}>
           <h1 className="text-sm font-semibold leading-tight text-surface-100">TrussIQ</h1>
-          <p className="text-[9px] leading-tight text-surface-400">Advanced FEA Lab</p>
+          <p className="text-[9px] leading-tight text-surface-400">Classroom structural lab</p>
         </div>
       </button>
 
-      <div className="hidden shrink-0 items-center gap-3 border-r border-surface-700 px-2 text-[10px] sm:flex">
+      <div className={`hidden shrink-0 items-center gap-3 border-r border-surface-700 px-2 text-[10px] ${focusLayout ? '' : 'sm:flex'}`}>
         <div>
           <span className="text-surface-500">Nodes</span>
           <strong className="ml-1 font-mono text-surface-200">{nodeCount}</strong>
@@ -240,10 +265,12 @@ export function TopBar({
             setPresetsOpen(opening);
             setExportOpen(false);
             setDynOpen(false);
+            setMoreOpen(false);
           }}
           aria-expanded={presetsOpen}
           aria-haspopup="menu"
           aria-controls="presets-menu"
+          aria-label="Presets"
           data-tooltip="Load a proven truss configuration"
           className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-2 text-xs transition-all ${
             presetsOpen
@@ -251,7 +278,8 @@ export function TopBar({
               : 'border-surface-700 bg-surface-800/80 text-surface-200 hover:border-surface-500 hover:bg-surface-700/80'
           }`}
         >
-          Presets <ChevronDown size={12} className={`transition-transform duration-200 ${presetsOpen ? 'rotate-180' : ''}`} />
+          <span className="topbar-action-label">Presets</span>
+          <ChevronDown size={12} className={`transition-transform duration-200 ${presetsOpen ? 'rotate-180' : ''}`} />
         </button>
         {presetsOpen && (
           createPortal(
@@ -301,10 +329,12 @@ export function TopBar({
             setDynOpen(opening);
             setPresetsOpen(false);
             setExportOpen(false);
+            setMoreOpen(false);
           }}
           aria-expanded={dynOpen}
           aria-haspopup="menu"
           aria-controls="dynamics-menu"
+          aria-label="Dynamics"
           data-tooltip="Apply wind or seismic loading"
           className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-2 text-xs transition-all ${
             dynamicsMode !== 'none'
@@ -315,7 +345,7 @@ export function TopBar({
           }`}
         >
           <Wind size={13} />
-          Dynamics
+          <span className="topbar-action-label">Dynamics</span>
           <ChevronDown size={12} className={`transition-transform duration-200 ${dynOpen ? 'rotate-180' : ''}`} />
         </button>
         {dynOpen && (
@@ -375,85 +405,24 @@ export function TopBar({
 
       <button
         type="button"
-        onClick={onOpenCollapse}
-        title="Plastic collapse animation"
-        aria-label="Open plastic collapse animation"
-        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-surface-700 px-2 py-2 text-xs text-surface-300 hover:border-fail/40 hover:text-fail"
-      >
-        <Zap size={13} />
-        Collapse
-      </button>
-
-      <button
-        type="button"
-        onClick={onOpenAR}
-        title="3D / WebAR"
-        aria-label="Open 3D and WebAR viewer"
-        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-surface-700 px-2 py-2 text-xs text-surface-300 hover:border-accent/40 hover:text-accent"
-      >
-        <Box size={13} />
-        3D/AR
-      </button>
-
-      <button
-        type="button"
-        onClick={onOpenCompare}
-        title="Compare designs"
-        aria-label="Compare designs"
-        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-surface-700 px-2 py-2 text-xs text-surface-300 hover:border-accent/40 hover:text-accent"
-      >
-        <Columns2 size={13} />
-        Compare
-      </button>
-
-      <button
-        type="button"
         onClick={onOpenDemo}
         title="Launch guided demo"
+        aria-label="Launch guided demo"
         className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-accent/40 bg-accent/10 px-2 py-2 text-xs text-accent hover:bg-accent/20"
       >
         <Sparkles size={13} />
-        Demo
-      </button>
-
-      <button
-        type="button"
-        onClick={onOpenPresentation}
-        title="Open presentation mode"
-        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-surface-700 px-2 py-2 text-xs text-surface-300 hover:border-accent/40 hover:text-accent"
-      >
-        <MonitorPlay size={13} />
-        Present
-      </button>
-
-      <button
-        type="button"
-        onClick={onOpenMission}
-        title="Open engineering mission"
-        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-warn/40 bg-warn/10 px-2 py-2 text-xs text-warn hover:bg-warn/20"
-      >
-        <Flag size={13} />
-        Mission
-      </button>
-
-      <button
-        type="button"
-        onClick={onOpenCollaboration}
-        title="Open collaboration center"
-        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-surface-700 px-2 py-2 text-xs text-surface-300 hover:border-accent/40 hover:text-accent"
-      >
-        <Users size={13} />
-        Team
+        <span className="topbar-action-label">Demo</span>
       </button>
 
       <button
         type="button"
         onClick={onOpenImpact}
         title="Open challenge impact dashboard"
+        aria-label="Open challenge impact dashboard"
         className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-accent/30 bg-accent/10 px-2 py-2 text-xs text-accent hover:bg-accent/20"
       >
         <Trophy size={13} />
-        Impact
+        <span className="topbar-action-label">Impact</span>
       </button>
 
       <button
@@ -474,19 +443,79 @@ export function TopBar({
         className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-accent/30 bg-accent/5 px-2 py-2 text-xs text-accent hover:border-accent/60 hover:bg-accent/10"
       >
         <Command size={13} />
-        <span className="hidden 2xl:inline">Command</span>
       </button>
 
-      <button
-        type="button"
-        onClick={onOpenBrief}
-        title="Edit project brief and presentation context"
-        aria-label="Open project brief"
-        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-surface-700 px-2 py-2 text-xs text-surface-300 hover:border-accent/40 hover:text-accent"
-      >
-        <ClipboardList size={13} />
-        <span className="hidden 2xl:inline">Brief</span>
-      </button>
+      <div className="relative shrink-0">
+        <button
+          type="button"
+          onClick={(event) => {
+            const opening = !moreOpen;
+            if (opening) setMorePosition(positionMenu(event, 260));
+            setMoreOpen(opening);
+            setPresetsOpen(false);
+            setExportOpen(false);
+            setDynOpen(false);
+          }}
+          aria-expanded={moreOpen}
+          aria-haspopup="menu"
+          aria-controls="more-tools-menu"
+          aria-label="More tools"
+          data-tooltip="Compare, 3D, mission, team, and more"
+          className={`inline-flex items-center gap-1 rounded-lg border px-2 py-2 text-xs transition-all ${
+            moreOpen
+              ? 'border-accent/50 bg-accent/10 text-accent'
+              : 'border-surface-700 text-surface-300 hover:border-surface-500 hover:bg-surface-800'
+          }`}
+        >
+          <MoreHorizontal size={13} />
+          <span className="topbar-action-label">More</span>
+        </button>
+        {moreOpen &&
+          createPortal(
+            <div
+              ref={moreMenuRef}
+              id="more-tools-menu"
+              role="menu"
+              aria-label="More tools"
+              style={morePosition}
+              className="dropdown-enter menu-expand fixed z-[200] w-[16.25rem] overflow-hidden rounded-xl border border-surface-600/80 bg-surface-800/95 p-1.5 shadow-2xl shadow-black/30 backdrop-blur-xl"
+            >
+              <div className="px-3 pb-1.5 pt-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-accent">Explore</p>
+                <p className="mt-0.5 text-[10px] text-surface-500">Secondary tools stay here so the bar stays calm.</p>
+              </div>
+              {(
+                [
+                  { label: 'Present mode', detail: 'Full-canvas classroom view', icon: MonitorPlay, run: onOpenPresentation },
+                  { label: 'Compare designs', detail: 'Side-by-side result check', icon: Columns2, run: onOpenCompare },
+                  { label: '3D preview', detail: 'Orbit and export GLB', icon: Box, run: onOpenAR },
+                  { label: 'Collapse animation', detail: 'Plastic failure sequence', icon: Zap, run: onOpenCollapse },
+                  { label: 'Mission', detail: 'Scored design goals', icon: Flag, run: onOpenMission },
+                  { label: 'Team / share', detail: 'Local comments and review links', icon: Users, run: onOpenCollaboration },
+                  { label: 'Project brief', detail: 'Audience and presentation notes', icon: ClipboardList, run: onOpenBrief },
+                ] as const
+              ).map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-start gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs text-surface-200 transition-colors hover:bg-accent/10 hover:text-accent"
+                  onClick={() => {
+                    item.run();
+                    setMoreOpen(false);
+                  }}
+                >
+                  <item.icon size={14} className="mt-0.5 shrink-0 opacity-80" />
+                  <span>
+                    <span className="block font-medium">{item.label}</span>
+                    <span className="mt-0.5 block text-[10px] text-surface-500">{item.detail}</span>
+                  </span>
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )}
+      </div>
 
       <button
         type="button"
@@ -521,16 +550,23 @@ export function TopBar({
         </button>
       </div>
 
-      <label className="flex shrink-0 items-center gap-1 text-[10px] text-surface-400">
-        Grid
+      <label
+        className="flex shrink-0 items-center gap-1 text-[10px] text-surface-400"
+        title="Base grid size — squares auto-refine as you zoom"
+      >
+        Grid □
         <select
           value={gridSize}
           onChange={(e) => onGridSize(Number(e.target.value) as GridSize)}
+          aria-label="Base grid size; squares auto-refine when zooming"
           className="rounded border border-surface-700 bg-surface-800 px-1 py-1 text-[10px] text-surface-200"
         >
-          <option value={10}>10</option>
-          <option value={20}>20</option>
-          <option value={50}>50</option>
+          <option value={1}>1 mm</option>
+          <option value={2}>2 mm</option>
+          <option value={5}>5 mm</option>
+          <option value={10}>10 mm</option>
+          <option value={20}>20 mm</option>
+          <option value={50}>50 mm</option>
         </select>
       </label>
 
@@ -561,8 +597,20 @@ export function TopBar({
       <div className="ml-auto flex shrink-0 items-center gap-1">
         <button
           type="button"
+          onClick={onToggleToolbar}
+          title={toolbarOpen ? 'Hide drawing tools' : 'Show drawing tools'}
+          aria-label={toolbarOpen ? 'Hide drawing tools' : 'Show drawing tools'}
+          aria-pressed={toolbarOpen}
+          className={`rounded-lg border p-2 ${toolbarOpen ? 'border-accent/40 bg-accent/10 text-accent' : 'border-surface-700 text-surface-300'}`}
+        >
+          <PanelLeft size={13} />
+        </button>
+        <button
+          type="button"
           onClick={onToggleSidebar}
           title={sidebarOpen ? 'Hide inspector' : 'Show inspector'}
+          aria-label={sidebarOpen ? 'Hide inspector' : 'Show inspector'}
+          aria-pressed={sidebarOpen}
           className={`rounded-lg border p-2 ${sidebarOpen ? 'border-accent/40 bg-accent/10 text-accent' : 'border-surface-700 text-surface-300'}`}
         >
           <PanelRight size={13} />
@@ -585,6 +633,37 @@ export function TopBar({
         >
           <Keyboard size={13} />
         </button>
+        <button
+          type="button"
+          onClick={onToggleSounds}
+          title={soundsEnabled ? 'Mute UI sounds' : 'Enable UI sounds'}
+          aria-label={soundsEnabled ? 'Mute UI sounds' : 'Enable UI sounds'}
+          aria-pressed={soundsEnabled}
+          className={`rounded-lg border p-2 ${
+            soundsEnabled
+              ? 'border-accent/40 bg-accent/10 text-accent'
+              : 'border-surface-700 text-surface-300'
+          }`}
+        >
+          {soundsEnabled ? <Volume2 size={13} /> : <VolumeX size={13} />}
+        </button>
+        <label
+          className="hidden items-center gap-1 rounded-lg border border-surface-700 px-1.5 py-1 text-[10px] text-surface-400 sm:inline-flex"
+          title="Scale the workspace UI"
+        >
+          <span className="sr-only">UI scale</span>
+          <select
+            value={uiScale}
+            onChange={(e) => onUiScale(Number(e.target.value))}
+            aria-label="UI scale"
+            className="max-w-[3.5rem] bg-transparent text-[10px] text-surface-200 outline-none"
+          >
+            <option value={0.85}>85%</option>
+            <option value={1}>100%</option>
+            <option value={1.15}>115%</option>
+            <option value={1.3}>130%</option>
+          </select>
+        </label>
         <button
           type="button"
           onClick={onToggleTheme}
@@ -616,6 +695,7 @@ export function TopBar({
               setExportOpen(opening);
               setPresetsOpen(false);
               setDynOpen(false);
+              setMoreOpen(false);
             }}
             aria-label="Open export and import menu"
             aria-expanded={exportOpen}

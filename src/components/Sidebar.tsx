@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, CheckCircle2, Gauge, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, ChevronRight, Gauge, XCircle } from 'lucide-react';
 import { lazy, Suspense, useState } from 'react';
 import type { SectionParams } from '../lib/crossSections';
 import { solidRodFromArea } from '../lib/crossSections';
@@ -35,6 +35,7 @@ interface SidebarProps {
   onFocusNodes: (ids: string[]) => void;
   onRunSolver: () => void;
   audit: StructureAudit;
+  onCollapse?: () => void;
 }
 
 type Tab = 'health' | 'inspect' | 'analytics' | 'audit' | 'ai';
@@ -60,6 +61,7 @@ export function Sidebar({
   onFocusNodes,
   onRunSolver,
   audit,
+  onCollapse,
 }: SidebarProps) {
   const [tab, setTab] = useState<Tab>('inspect');
   const selectedBeam = beams.find((b) => b.id === selectedBeamId) ?? null;
@@ -72,7 +74,7 @@ export function Sidebar({
 
   return (
     <aside className="inspector-content absolute inset-y-0 right-0 z-20 flex w-[min(22rem,calc(100vw-3.5rem))] max-w-full shrink-0 flex-col border-l border-surface-700 bg-surface-900 shadow-2xl shadow-black/25 lg:static lg:w-[22rem] lg:shadow-none">
-      <div className="flex border-b border-surface-700">
+      <div className="flex items-stretch border-b border-surface-700">
         {(
           [
             ['health', 'Overview'],
@@ -86,7 +88,7 @@ export function Sidebar({
             key={id}
             type="button"
             onClick={() => setTab(id)}
-            className={`flex-1 px-2 py-2.5 text-xs font-semibold uppercase tracking-wide transition ${
+            className={`flex-1 px-1.5 py-2.5 text-[10px] font-semibold uppercase tracking-wide transition sm:px-2 sm:text-xs ${
               tab === id
                 ? 'border-b-2 border-accent text-accent'
                 : 'text-surface-400 hover:text-surface-200'
@@ -105,6 +107,17 @@ export function Sidebar({
             )}
           </button>
         ))}
+        {onCollapse && (
+          <button
+            type="button"
+            title="Hide inspector (pull tab to restore)"
+            aria-label="Hide inspector"
+            onClick={onCollapse}
+            className="flex w-9 shrink-0 items-center justify-center border-l border-surface-700 text-surface-400 transition hover:bg-surface-800 hover:text-accent"
+          >
+            <ChevronRight size={16} />
+          </button>
+        )}
       </div>
 
       <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4">
@@ -373,6 +386,7 @@ export function Sidebar({
             analysis={ai}
             result={result}
             nodes={analysisNodes}
+            beams={beams}
             onFocusBeams={onFocusBeams}
             onFocusNodes={onFocusNodes}
           />

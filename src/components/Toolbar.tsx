@@ -1,4 +1,5 @@
 import {
+  ChevronLeft,
   CircleDot,
   Eraser,
   Hand,
@@ -28,11 +29,53 @@ const TOOLS: ToolDef[] = [
 interface ToolbarProps {
   tool: ToolMode;
   onToolChange: (tool: ToolMode) => void;
+  onCollapse?: () => void;
+  /** Bottom dock for phones; rail is the desktop side strip. */
+  variant?: 'rail' | 'mobile';
 }
 
-export function Toolbar({ tool, onToolChange }: ToolbarProps) {
+export function Toolbar({ tool, onToolChange, onCollapse, variant = 'rail' }: ToolbarProps) {
+  if (variant === 'mobile') {
+    return (
+      <aside className="mobile-tool-dock" aria-label="Drawing tools">
+        {TOOLS.map((t) => {
+          const active = tool === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              title={`${t.label} (${t.hotkey})`}
+              aria-label={`${t.label} (${t.hotkey})`}
+              aria-pressed={active}
+              onClick={() => onToolChange(t.id)}
+              className={`flex flex-col items-center justify-center rounded-xl px-1.5 py-1 transition-colors ${
+                active
+                  ? 'bg-accent/20 text-accent'
+                  : 'text-surface-400 hover:bg-surface-800 hover:text-surface-100'
+              }`}
+            >
+              {t.icon}
+              <span className="mt-0.5 text-[9px] font-mono font-medium opacity-70">{t.hotkey}</span>
+            </button>
+          );
+        })}
+      </aside>
+    );
+  }
+
   return (
-    <aside className="flex w-14 shrink-0 flex-col items-center gap-1 border-r border-surface-700 bg-surface-900 py-3">
+    <aside className="flex h-full w-14 shrink-0 flex-col items-center gap-1 border-r border-surface-700 bg-surface-900 py-2">
+      {onCollapse && (
+        <button
+          type="button"
+          title="Hide tools (pull tab to restore)"
+          aria-label="Hide drawing tools"
+          onClick={onCollapse}
+          className="mb-1 flex h-8 w-11 items-center justify-center rounded-lg text-surface-400 transition hover:bg-surface-800 hover:text-accent"
+        >
+          <ChevronLeft size={16} />
+        </button>
+      )}
       {TOOLS.map((t) => {
         const active = tool === t.id;
         return (
@@ -40,6 +83,8 @@ export function Toolbar({ tool, onToolChange }: ToolbarProps) {
             key={t.id}
             type="button"
             title={`${t.label} (${t.hotkey})`}
+            aria-label={`${t.label} (${t.hotkey})`}
+            aria-pressed={active}
             onClick={() => onToolChange(t.id)}
             className={`group relative flex h-11 w-11 flex-col items-center justify-center rounded-lg transition-colors ${
               active

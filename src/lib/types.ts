@@ -6,8 +6,8 @@ export type SupportType = 'none' | 'pin' | 'rollerX' | 'rollerY' | 'fixed';
 /** Active editor tool mode. */
 export type ToolMode = 'select' | 'node' | 'beam' | 'force' | 'support' | 'erase';
 
-/** Grid snap increment in canvas pixels (world mm mapped 1:1 at default zoom). */
-export type GridSize = 10 | 20 | 50;
+/** Grid snap / square length in world millimeters. */
+export type GridSize = 1 | 2 | 5 | 10 | 20 | 50;
 
 export type ThemeMode = 'dark' | 'light';
 

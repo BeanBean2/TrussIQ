@@ -8,9 +8,16 @@ export const CAC_OFFICIAL_SOURCES = {
 
 export const CAC_DEADLINE_NOTICE = 'The 2026 rules PDF lists October 26, 2026 at 12:00 p.m. EDT; the registration page lists 9:00 p.m. ET. These official sources conflict. Confirm the deadline in the live submission portal and submit early.';
 
+/** One-sentence purpose judges can repeat — personalize with your district/school if you wish. */
+export const CAC_PURPOSE_SENTENCE =
+  'TrussIQ gives under-resourced classrooms free browser-based truss FEA so students can learn structural load paths without expensive engineering software.';
+
+export const CAC_TARGET_AUDIENCE =
+  'Middle and high school physics, robotics, and intro engineering students and teachers.';
+
 export const CAC_VIDEO_STORYBOARD = [
   { time: '0:00–0:15', prompt: 'Introduce each participant and say the app name.' },
-  { time: '0:15–0:30', prompt: 'Explain the app purpose in one clear sentence and name its target audience.' },
+  { time: '0:15–0:30', prompt: `Explain the app purpose in one clear sentence and name its target audience. Suggested purpose: "${CAC_PURPOSE_SENTENCE}" Audience: ${CAC_TARGET_AUDIENCE}` },
   { time: '0:30–1:05', prompt: 'Show the app working. Load or open a model, run the analysis, and explain one result in your own words.' },
   { time: '1:05–1:25', prompt: 'Make one design change and compare the result. Explain that TrussIQ gives a linear, axial-only learning estimate, not a construction safety approval.' },
   { time: '1:25–1:40', prompt: 'Name the tools and programming languages used. Describe a part of the code you personally understand; disclose AI assistance accurately in the application.' },
@@ -38,10 +45,11 @@ export function buildSubmissionPrepText(options: {
     'APP / VIDEO OUTLINE',
     `App: ${appTitle}`,
     'Participant name(s): [add in your official submission]',
-    'Purpose (one clear sentence): [write your own]',
-    'Target audience: [write your own]',
-    'Tools and programming languages: [list accurately]',
-    'Demonstration: [show the app working]',
+    `Purpose (one clear sentence): ${CAC_PURPOSE_SENTENCE}`,
+    `Target audience: ${CAC_TARGET_AUDIENCE}`,
+    'Tools and programming languages: TypeScript, React, Vite, Tailwind CSS, Three.js; optional Google Gemini API for coaching',
+    'Demonstration: [show the app working — guided demo or Howe preset → Run FEA → one design change]',
+    'Privacy note: Models and drafts stay in the browser by default. Optional Gemini coaching sends model context to Google only when an API key is configured (see PRIVACY.md).',
     '',
     'SUGGESTED DEMO VIDEO STORYBOARD (about 1 minute 55 seconds; personalize every line)',
     ...CAC_VIDEO_STORYBOARD.map((beat) => `${beat.time}  ${beat.prompt}`),
@@ -59,9 +67,10 @@ export function isYieldLimitMet(result: FEAResult | null): boolean {
 
 /** Return an explicitly editable, evidence-aware draft for the CAC demo story. */
 export function buildPresentationDraft(nodeCount: number, memberCount: number, result: FEAResult | null): string {
+  const opener = `${CAC_PURPOSE_SENTENCE} I built this for ${CAC_TARGET_AUDIENCE}`;
   if (!result?.success) {
-    return `Draft to personalize: "I used TrussIQ to study a model with ${nodeCount} nodes and ${memberCount} members. I still need to run the analysis and record what it shows. My design decision was [describe your change and reasoning]."`;
+    return `Draft to personalize: "${opener} On my current model (${nodeCount} nodes, ${memberCount} members) I still need to run the analysis and record what it shows. My design decision was [describe your change and reasoning]."`;
   }
 
-  return `Draft to personalize: "I used TrussIQ to study a model with ${nodeCount} nodes and ${memberCount} members. Its current peak yield utilization is ${(result.maxSafetyRatio * 100).toFixed(1)}%. This is a linear, axial-only estimate, not a complete safety assessment. My design decision was [describe your change and evidence]."`;
+  return `Draft to personalize: "${opener} On my current model (${nodeCount} nodes, ${memberCount} members) peak yield utilization is ${(result.maxSafetyRatio * 100).toFixed(1)}%. This is a linear, axial-only estimate, not a complete safety assessment. My design decision was [describe your change and evidence]."`;
 }

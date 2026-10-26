@@ -17,6 +17,9 @@ const ROWS: { keys: string; action: string }[] = [
   { keys: 'Ctrl+Y', action: 'Redo' },
   { keys: 'Delete', action: 'Delete selection' },
   { keys: 'Esc', action: 'Cancel / close panels' },
+  { keys: 'Scroll wheel', action: 'Zoom in / out toward cursor' },
+  { keys: 'Drag empty canvas', action: 'Pan / move the view' },
+  { keys: 'Right-drag / Mid-drag', action: 'Pan the canvas' },
   { keys: '?', action: 'This shortcuts guide' },
 ];
 

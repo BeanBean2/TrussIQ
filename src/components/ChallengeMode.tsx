@@ -44,8 +44,8 @@ export function ChallengeMode({
 
   return (
     <>
-      <button type="button" onClick={() => { setSelectedId(activeChallengeId ?? 'low-budget-span'); setOpen(true); }} aria-label="Open Bridge Challenge Mode" title="Bridge Challenge Mode" className="fixed bottom-[4.5rem] right-4 z-40 inline-flex items-center gap-2 rounded-full border border-accent/40 bg-surface-900/95 px-4 py-3 text-xs font-semibold text-accent shadow-xl backdrop-blur hover:bg-surface-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-        <Trophy size={15} /> Bridge Challenge
+      <button type="button" onClick={() => { setSelectedId(activeChallengeId ?? 'low-budget-span'); setOpen(true); }} aria-label="Open Bridge Challenge Mode" title="Bridge Challenge Mode" className="challenge-fab fixed bottom-4 right-4 z-40 inline-flex items-center gap-2 rounded-full border border-accent/40 bg-surface-900/95 px-3.5 py-2.5 text-xs font-semibold text-accent shadow-xl backdrop-blur hover:bg-surface-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+        <Trophy size={15} /> <span className="hidden sm:inline">Challenge</span>
       </button>
       {open && <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-black/70 p-3 pt-[5vh] backdrop-blur-sm">
         <section ref={dialogRef} role="dialog" aria-modal="true" aria-label="Bridge Challenge Mode" className="w-full max-w-3xl overflow-hidden rounded-2xl border border-accent/30 bg-surface-900 shadow-2xl">

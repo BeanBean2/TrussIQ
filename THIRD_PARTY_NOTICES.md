@@ -8,6 +8,7 @@ Versions below are the versions currently installed from `package-lock.json`. Li
 
 | Package | Version | License | Use |
 | --- | --- | --- | --- |
+| @google/generative-ai | 0.24.1 | Apache-2.0 | Optional Gemini engineering coach (only when an API key is configured) |
 | canvas-confetti | 1.9.4 | ISC | Celebrate completed learning challenges |
 | fflate | 0.8.3 | MIT | Compress self-contained model share links |
 | jspdf | 4.2.1 | MIT | Generate PDF reports |
@@ -44,4 +45,11 @@ The interface also requests IBM Plex Sans and IBM Plex Mono from Google Fonts wh
 
 ## AI assistance
 
-OpenAI Codex coding assistance has been used in this working session to review code, generate and modify application components and features, debug behavior, and run verification commands. The student entrant/team must review this record, add any other AI tools and tasks used during development, and accurately describe their own contributions in the official application. AI assistance does not replace the requirement that students make significant original contributions and understand the submitted code.
+The following AI tools have assisted development of this repository. The student entrant/team must review this record, add any other tools and tasks, and accurately describe their own contributions in the official Congressional App Challenge application.
+
+| Tool | Typical tasks in this repo |
+| --- | --- |
+| OpenAI Codex / Cursor agent | Review code, implement UI and features, debug behavior, write docs (README, PRIVACY, SUBMISSION), run verification commands |
+| Google Gemini (in-app, optional) | Runtime coaching answers when a user supplies an API key; not required to use TrussIQ |
+
+AI assistance does not replace the requirement that students make significant original contributions and understand the submitted code — especially the Direct Stiffness Method solver in `src/lib/feaEngine.ts` and related math.

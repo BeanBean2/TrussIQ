@@ -49,7 +49,7 @@ export function DemoHelper({
 
   return (
     <>
-      <button type="button" onClick={() => { setStep(0); setFinished(false); setOpen(true); }} aria-label="Open record video guide" title="Record Video Guide" className="fixed bottom-4 right-4 z-40 inline-flex items-center gap-2 rounded-full border border-surface-600 bg-surface-900/95 px-4 py-3 text-xs font-semibold text-surface-100 shadow-xl backdrop-blur hover:border-accent/50 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+      <button type="button" onClick={() => { setStep(0); setFinished(false); setOpen(true); }} aria-label="Open record video guide" title="Record Video Guide" className="demo-helper-fab fixed bottom-16 right-4 z-40 inline-flex items-center gap-2 rounded-full border border-surface-600 bg-surface-900/95 px-3.5 py-2.5 text-xs font-semibold text-surface-100 shadow-xl backdrop-blur hover:border-accent/50 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
         <Clapperboard size={15} /> Record Video Guide
       </button>
       {open && <div className="fixed inset-0 z-[85] flex items-start justify-center overflow-y-auto bg-black/70 p-3 pt-[7vh] backdrop-blur-sm">

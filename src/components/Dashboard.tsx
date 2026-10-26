@@ -66,6 +66,8 @@ import { ChallengeMode } from './ChallengeMode';
 import { DemoHelper } from './DemoHelper';
 import { ResizeDivider } from './ResizeDivider';
 import { HIGH_WIND_PROFILE, type BridgeChallengeId } from '../lib/bridgeChallenges';
+import { computeStructureMetrics, type MemberViewFilter } from '../lib/structureMetrics';
+import { FeatureBar } from './FeatureBar';
 
 const ARViewer = lazy(() =>
   import('./ARViewer').then((m) => ({ default: m.ARViewer })),
@@ -108,6 +110,7 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
   const [unstableMsg, setUnstableMsg] = useState<string | null>(null);
   const [formula, setFormula] = useState<FormulaBreakdown | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialFirstRun, setTutorialFirstRun] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showCollapse, setShowCollapse] = useState(false);
   const [showAR, setShowAR] = useState(false);
@@ -129,7 +132,13 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
   const [draftStatus, setDraftStatus] = useState('Preparing workspace');
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const [soundsEnabled, setSoundsEnabled] = useState(() => readStoredValue('trussiq-ui-sounds') !== '0');
-  const [sidebarOpen, setSidebarOpen] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    const stored = readStoredValue('trussiq-sidebar-open');
+    if (stored === '0') return false;
+    if (stored === '1') return true;
+    return window.matchMedia('(min-width: 1024px)').matches;
+  });
+  const [toolbarOpen, setToolbarOpen] = useState(() => readStoredValue('trussiq-toolbar-open') !== '0');
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const key = window.matchMedia('(max-width: 767px)').matches ? 'trussiq-inspector-height' : 'trussiq-inspector-width';
     const stored = Number(readStoredValue(key));
@@ -148,6 +157,16 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
   const [showGuide, setShowGuide] = useState(
     () => readStoredValue('trussiq-guide-dismissed') !== '1',
   );
+  const [showForceLabels, setShowForceLabels] = useState(
+    () => readStoredValue('trussiq-force-labels') === '1',
+  );
+  const [memberFilter, setMemberFilter] = useState<MemberViewFilter>('all');
+  const [autoSolve, setAutoSolve] = useState(
+    () => readStoredValue('trussiq-auto-solve') === '1',
+  );
+  const [loadScalePct, setLoadScalePct] = useState(100);
+  const [screenshotStatus, setScreenshotStatus] = useState<string | null>(null);
+  const [resultStale, setResultStale] = useState(false);
 
   const [dynamicsMode, setDynamicsMode] = useState<DynamicsMode>('none');
   const [wind, setWind] = useState<WindParams>(DEFAULT_WIND);
@@ -159,15 +178,28 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
   });
 
   const canvasEl = useRef<HTMLCanvasElement | null>(null);
+  const setCanvasEl = useCallback((el: HTMLCanvasElement | null) => {
+    canvasEl.current = el;
+  }, []);
   const toastTimeoutRef = useRef<number | null>(null);
   const bootstrapped = useRef(false);
   const skipInitialAutosave = useRef(false);
   const sharedReviewSession = useRef(false);
+  const solveGenRef = useRef(0);
+  const autoSolveRef = useRef(autoSolve);
+  autoSolveRef.current = autoSolve;
 
-  /** Nodes with environmental loads applied (for solver + display arrows). */
+  /** User loads after the service-load slider (before wind / seismic). */
+  const scaledUserNodes = useMemo(() => {
+    const scale = loadScalePct / 100;
+    if (scale === 1) return nodes;
+    return nodes.map((n) => ({ ...n, fx: n.fx * scale, fy: n.fy * scale }));
+  }, [nodes, loadScalePct]);
+
+  /** Nodes with load-scale + environmental loads (for solver + display arrows). */
   const dynamicNodes = useMemo(
-    () => applyDynamics(nodes, beams, dynamicsMode, wind, seismic),
-    [nodes, beams, dynamicsMode, wind, seismic],
+    () => applyDynamics(scaledUserNodes, beams, dynamicsMode, wind, seismic),
+    [scaledUserNodes, beams, dynamicsMode, wind, seismic],
   );
 
   const ai = useMemo(
@@ -175,8 +207,14 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
     [dynamicNodes, beams, result],
   );
   const invalidate = useCallback(() => {
-    setResult(null);
-    setShowDeflection(false);
+    // Keep last FEA frame while Live FEA re-solves (avoids heatmap flicker)
+    if (autoSolveRef.current) {
+      setResultStale(true);
+    } else {
+      setResult(null);
+      setShowDeflection(false);
+      setResultStale(false);
+    }
     setHighlightBeamIds([]);
     setHighlightNodeIds([]);
   }, []);
@@ -237,6 +275,32 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
     if (initialDemo) setShowDemo(true);
   }, [initialDemo]);
 
+  // First workspace visit: walk the user through the core tools and FEA workflow.
+  useEffect(() => {
+    if (initialDemo || initialSharedState) return;
+    if (readStoredValue('trussiq-onboarding-complete') === '1') return;
+    const timer = window.setTimeout(() => {
+      setTutorialFirstRun(true);
+      setShowTutorial(true);
+      setShowGuide(false);
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [initialDemo, initialSharedState]);
+
+  const closeTutorial = useCallback(() => {
+    setShowTutorial(false);
+    setTutorialFirstRun(false);
+    writeStoredValue('trussiq-onboarding-complete', '1');
+    writeStoredValue('trussiq-guide-dismissed', '1');
+    setShowGuide(false);
+  }, []);
+
+  const openTutorial = useCallback((firstRun = false) => {
+    setTutorialFirstRun(firstRun);
+    setShowTutorial(true);
+    if (firstRun) setShowGuide(false);
+  }, []);
+
   useEffect(() => {
     const onCommandShortcut = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
@@ -276,49 +340,99 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dynamicsMode, nodes, beams, wind, seismic.amplitude, seismic.omega]);
 
-  const runSolver = useCallback(() => {
+  const structureMetrics = useMemo(
+    () => computeStructureMetrics(nodes, beams),
+    [nodes, beams],
+  );
+
+  const runSolver = useCallback((opts?: { quiet?: boolean }) => {
     if (audit.errors > 0) {
-      const first = audit.issues.find((issue) => issue.severity === 'error');
-      setUnstableMsg(`Fix the model audit errors before running FEA. ${first?.title ?? ''} ${first?.message ?? ''}`.trim());
+      if (!opts?.quiet) {
+        const first = audit.issues.find((issue) => issue.severity === 'error');
+        setUnstableMsg(`Fix the model audit errors before running FEA. ${first?.title ?? ''} ${first?.message ?? ''}`.trim());
+      }
       return;
     }
     if (nodes.length < 2 || beams.length < 1) {
-      setUnstableMsg(
-        'Add at least two nodes and one beam before running the FEA solver.',
-      );
+      if (!opts?.quiet) {
+        setUnstableMsg(
+          'Add at least two nodes and one beam before running the FEA solver.',
+        );
+      }
       return;
     }
+    const gen = ++solveGenRef.current;
     setSolving(true);
     requestAnimationFrame(() => {
-      const loaded = applyDynamics(nodes, beams, dynamicsMode, wind, seismic);
-      const res = solveTruss(loaded, beams);
-      setResult(res);
-      setSolving(false);
-      if (res.success) {
-        playUiSound('solve', soundsEnabled);
-        if (res.passed) {
-          playUiSound('pass', soundsEnabled);
-          showToast('Analysis solved; modeled members are below yield.');
-        } else {
-          showToast('Analysis solved; one or more members exceed modeled yield.');
+      // Drop stale async solves (rapid edits / double Live FEA)
+      if (gen !== solveGenRef.current) return;
+      try {
+        const scale = loadScalePct / 100;
+        const scaledNodes =
+          scale === 1
+            ? nodes
+            : nodes.map((n) => ({ ...n, fx: n.fx * scale, fy: n.fy * scale }));
+        const loaded = applyDynamics(scaledNodes, beams, dynamicsMode, wind, seismic);
+        const res = solveTruss(loaded, beams);
+        if (gen !== solveGenRef.current) return;
+        setResult(res);
+        setResultStale(false);
+        if (showGuide) {
+          setShowGuide(false);
+          writeStoredValue('trussiq-guide-dismissed', '1');
         }
-      } else if (res.unstable) {
-        setUnstableMsg(
-          res.message ??
-            'Unstable Structure: Add more supports to prevent rigid body motion.',
-        );
-      } else if (!res.success && res.message) {
-        setUnstableMsg(res.message);
+        if (opts?.quiet) return;
+        if (res.success) {
+          playUiSound('solve', soundsEnabled);
+          if (res.passed) {
+            playUiSound('pass', soundsEnabled);
+            showToast(
+              loadScalePct === 100
+                ? 'Analysis solved; modeled members are below yield.'
+                : `Solved at ${loadScalePct}% load; members below yield.`,
+            );
+          } else {
+            showToast(
+              loadScalePct === 100
+                ? 'Analysis solved; one or more members exceed modeled yield.'
+                : `Solved at ${loadScalePct}% load; yield exceeded.`,
+            );
+          }
+        } else if (res.unstable) {
+          setUnstableMsg(
+            res.message ??
+              'Unstable Structure: Add more supports to prevent rigid body motion.',
+          );
+        } else if (!res.success && res.message) {
+          setUnstableMsg(res.message);
+        }
+      } catch {
+        if (gen === solveGenRef.current) {
+          setUnstableMsg('Solver failed unexpectedly. Check the model and try again.');
+        }
+      } finally {
+        if (gen === solveGenRef.current) setSolving(false);
       }
     });
-  }, [nodes, beams, dynamicsMode, wind, seismic, audit, soundsEnabled, showToast]);
+  }, [nodes, beams, dynamicsMode, wind, seismic, audit, soundsEnabled, showToast, loadScalePct, showGuide]);
 
-  // Re-solve when wind mode toggled on
+  // Live FEA — debounced re-solve after edits
   useEffect(() => {
-    if (dynamicsMode === 'wind') {
-      runSolver();
+    if (!autoSolve || presentationMode || dynamicsMode === 'seismic') return;
+    if (nodes.length < 2 || beams.length < 1) return;
+    const timer = window.setTimeout(() => runSolver({ quiet: true }), 500);
+    return () => window.clearTimeout(timer);
+  }, [autoSolve, presentationMode, dynamicsMode, nodes, beams, loadScalePct, wind, seismic, runSolver]);
+
+  // Re-solve once when entering wind mode
+  const prevDynamicsRef = useRef(dynamicsMode);
+  useEffect(() => {
+    const prev = prevDynamicsRef.current;
+    prevDynamicsRef.current = dynamicsMode;
+    if (dynamicsMode === 'wind' && prev !== 'wind') {
+      runSolver({ quiet: true });
     }
-  }, [dynamicsMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dynamicsMode, runSolver]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -386,7 +500,7 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
         setForceTarget(null);
         setUnstableMsg(null);
         setFormula(null);
-        setShowTutorial(false);
+        if (showTutorial) closeTutorial();
         setShowShortcuts(false);
         setShowCollapse(false);
         setShowAR(false);
@@ -399,6 +513,12 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
         setShowCommandPalette(false);
         setShowBrief(false);
         setShowImpact(false);
+        setShowDemo(false);
+        setShowChallengeLibrary(false);
+        setShowGeometryTools(false);
+        setShowTemplateLibrary(false);
+        setShowLoadCaseStudy(false);
+        setShowMaterialStudy(false);
       }
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedNodeId) {
@@ -420,6 +540,25 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
           invalidate();
         }
       }
+      // Arrow-key nudge selected node by one grid step
+      if (
+        selectedNodeId &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)
+      ) {
+        e.preventDefault();
+        const dx = e.key === 'ArrowLeft' ? -gridSize : e.key === 'ArrowRight' ? gridSize : 0;
+        const dy = e.key === 'ArrowUp' ? -gridSize : e.key === 'ArrowDown' ? gridSize : 0;
+        commit((prev) => ({
+          ...prev,
+          nodes: prev.nodes.map((n) =>
+            n.id === selectedNodeId ? { ...n, x: n.x + dx, y: n.y + dy } : n,
+          ),
+        }));
+        invalidate();
+      }
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         runSolver();
@@ -427,7 +566,7 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedNodeId, selectedBeamId, commit, undo, redo, invalidate, runSolver, state, showCollapse]);
+  }, [selectedNodeId, selectedBeamId, commit, undo, redo, invalidate, runSolver, state, showCollapse, gridSize, showTutorial, closeTutorial]);
 
   const loadPreset = (key: PresetKey) => {
     replace(PRESET_LOADERS[key].create());
@@ -652,7 +791,11 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
   };
 
   return (
-    <div className="workspace-root flex h-[100dvh] min-h-[24rem] flex-col overflow-hidden bg-surface-950 text-surface-100">
+    <div
+      className="workspace-root flex h-[100dvh] min-h-[24rem] flex-col overflow-hidden bg-surface-950 text-surface-100"
+      data-inspector-open={!presentationMode && sidebarOpen ? 'true' : 'false'}
+      style={{ '--inspector-height': `${sidebarWidth}px` } as CSSProperties}
+    >
       {!presentationMode && <TopBar
         gridSize={gridSize}
         showDeflection={showDeflection}
@@ -695,7 +838,7 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
           redo();
           invalidate();
         }}
-        onOpenTutorial={() => setShowTutorial(true)}
+        onOpenTutorial={() => openTutorial(false)}
         onDynamicsMode={(m) => {
           setDynamicsMode(m);
           if (m === 'none') setShowDeflection(false);
@@ -706,20 +849,30 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
           setWind(profile === 'storm' ? STORM_WIND : DEFAULT_WIND);
           setDynamicsMode('wind');
         }}
-        onOpenCollapse={() => setShowCollapse(true)}
-        onOpenAR={() => setShowAR(true)}
-        onOpenCompare={() => setShowCompare(true)}
+        onOpenCollapse={() => { setShowDemo(false); setShowMission(false); setShowCollaboration(false); setShowCompare(false); setShowAR(false); setShowImpact(false); setShowCollapse(true); }}
+        onOpenAR={() => { setShowDemo(false); setShowCollapse(false); setShowCompare(false); setShowAR(true); }}
+        onOpenCompare={() => { setShowDemo(false); setShowCollapse(false); setShowAR(false); setShowCompare(true); }}
         onOpenShortcuts={() => setShowShortcuts(true)}
-        onOpenDemo={() => setShowDemo(true)}
-        onOpenPresentation={() => setPresentationMode(true)}
-        onOpenMission={() => setShowMission(true)}
-        onOpenCollaboration={() => setShowCollaboration(true)}
+        onOpenDemo={() => { setShowMission(false); setShowCollaboration(false); setShowImpact(false); setShowCompare(false); setShowAR(false); setShowCollapse(false); setShowDemo(true); }}
+        onOpenPresentation={() => { setShowDemo(false); setPresentationMode(true); }}
+        onOpenMission={() => { setShowDemo(false); setShowCollaboration(false); setShowImpact(false); setShowMission(true); }}
+        onOpenCollaboration={() => { setShowDemo(false); setShowMission(false); setShowImpact(false); setShowCollaboration(true); }}
         onOpenCommand={() => setShowCommandPalette(true)}
         onOpenBrief={() => setShowBrief(true)}
-        onOpenImpact={() => setShowImpact(true)}
+        onOpenImpact={() => { setShowDemo(false); setShowMission(false); setShowCollaboration(false); setShowImpact(true); }}
         onOpenHome={onOpenHome ?? (() => undefined)}
         sidebarOpen={sidebarOpen}
-        onToggleSidebar={() => setSidebarOpen((open) => !open)}
+        onToggleSidebar={() => setSidebarOpen((open) => {
+          const next = !open;
+          writeStoredValue('trussiq-sidebar-open', next ? '1' : '0');
+          return next;
+        })}
+        toolbarOpen={toolbarOpen}
+        onToggleToolbar={() => setToolbarOpen((open) => {
+          const next = !open;
+          writeStoredValue('trussiq-toolbar-open', next ? '1' : '0');
+          return next;
+        })}
         uiScale={uiScale}
         onUiScale={(scale) => {
           setUiScale(scale);
@@ -755,28 +908,86 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
       )}
 
       {copyStatus && (
-        <div role="status" aria-live="polite" className="pointer-events-none fixed bottom-5 left-1/2 z-[95] -translate-x-1/2 rounded-lg border border-accent/40 bg-surface-900 px-3 py-2 text-xs font-medium text-accent shadow-xl animate-fade-in">
+        <div role="status" aria-live="polite" className="pointer-events-none fixed bottom-24 left-1/2 z-[95] -translate-x-1/2 rounded-lg border border-accent/40 bg-surface-900 px-3 py-2 text-xs font-medium text-accent shadow-xl animate-fade-in">
           {copyStatus}
         </div>
       )}
 
-      <div className="workspace-panels relative flex min-h-0 flex-1" style={{ '--inspector-height': `${sidebarWidth}px` } as CSSProperties}>
-        {!presentationMode && <div className="toolbar-panel" style={{ '--toolbar-width': `${toolbarWidth}px` } as CSSProperties}><Toolbar
-          tool={tool}
-          onToolChange={(t) => {
-            setTool(t);
-            setBeamDraftFrom(null);
-          }}
-        /></div>}
-        {!presentationMode && <ResizeDivider label="Resize drawing tools" orientation="vertical" onResize={(delta) => setToolbarWidth((width) => {
-          const next = Math.max(56, Math.min(112, width + delta));
-          writeStoredValue('trussiq-toolbar-width', String(next));
-          return next;
-        })} />}
+      <div
+        className={`workspace-panels relative flex min-h-0 min-w-0 flex-1 ${!toolbarOpen && !sidebarOpen ? 'workspace-panels--focus' : ''}`}
+      >
+        {!presentationMode && toolbarOpen && (
+          <div className="toolbar-panel max-md:hidden" style={{ '--toolbar-width': `${toolbarWidth}px` } as CSSProperties}>
+            <Toolbar
+              tool={tool}
+              onToolChange={(t) => {
+                setTool(t);
+                setBeamDraftFrom(null);
+              }}
+              onCollapse={() => {
+                setToolbarOpen(false);
+                writeStoredValue('trussiq-toolbar-open', '0');
+              }}
+            />
+          </div>
+        )}
+        {!presentationMode && toolbarOpen && (
+          <div className="max-md:hidden">
+            <ResizeDivider
+              label="Resize drawing tools"
+              orientation="vertical"
+              onResize={(delta) => setToolbarWidth((width) => {
+                const next = Math.max(56, Math.min(112, width + delta));
+                writeStoredValue('trussiq-toolbar-width', String(next));
+                return next;
+              })}
+            />
+          </div>
+        )}
 
-        <main className="relative min-h-0 min-w-0 flex-1">
+        <main className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+          {!presentationMode && (
+            <Toolbar
+              variant="mobile"
+              tool={tool}
+              onToolChange={(t) => {
+                setTool(t);
+                setBeamDraftFrom(null);
+              }}
+            />
+          )}
+          {!presentationMode && !toolbarOpen && (
+            <button
+              type="button"
+              className="panel-edge-tab panel-edge-tab-left absolute max-md:hidden"
+              title="Show drawing tools"
+              aria-label="Show drawing tools"
+              onClick={() => {
+                setToolbarOpen(true);
+                writeStoredValue('trussiq-toolbar-open', '1');
+              }}
+            >
+              <span className="panel-edge-tab-label">Tools</span>
+            </button>
+          )}
+          {!presentationMode && !sidebarOpen && (
+            <button
+              type="button"
+              className="panel-edge-tab panel-edge-tab-right absolute"
+              title="Show inspector"
+              aria-label="Show inspector"
+              onClick={() => {
+                setSidebarOpen(true);
+                writeStoredValue('trussiq-sidebar-open', '1');
+              }}
+            >
+              <span className="panel-edge-tab-label">Inspector</span>
+            </button>
+          )}
           <CanvasEditor
             nodes={dynamicNodes}
+            userLoadNodes={scaledUserNodes}
+            dynamicsMode={dynamicsMode}
             beams={beams}
             tool={tool}
             gridSize={gridSize}
@@ -789,9 +1000,9 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
             bucklingBeamIds={ai.bucklingBeamIds}
             highlightBeamIds={highlightBeamIds}
             highlightNodeIds={highlightNodeIds}
-            canvasRefCallback={(el) => {
-              canvasEl.current = el;
-            }}
+            showForceLabels={showForceLabels}
+            memberFilter={memberFilter}
+            canvasRefCallback={setCanvasEl}
             onSelectNode={setSelectedNodeId}
             onSelectBeam={setSelectedBeamId}
             onPlaceNode={placeNode}
@@ -813,6 +1024,63 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
             onEraseAt={eraseAt}
             onClearBeamDraft={() => setBeamDraftFrom(null)}
           />
+          {!presentationMode && (
+            <FeatureBar
+              showForceLabels={showForceLabels}
+              onToggleForceLabels={() =>
+                setShowForceLabels((v) => {
+                  const next = !v;
+                  writeStoredValue('trussiq-force-labels', next ? '1' : '0');
+                  return next;
+                })
+              }
+              memberFilter={memberFilter}
+              onMemberFilter={setMemberFilter}
+              autoSolve={autoSolve}
+              onToggleAutoSolve={() =>
+                setAutoSolve((v) => {
+                  const next = !v;
+                  writeStoredValue('trussiq-auto-solve', next ? '1' : '0');
+                  if (next) runSolver({ quiet: true });
+                  return next;
+                })
+              }
+              loadScalePct={loadScalePct}
+              onLoadScale={setLoadScalePct}
+              metrics={structureMetrics}
+              screenshotStatus={screenshotStatus}
+              resultStale={resultStale}
+              onScreenshot={async () => {
+                const canvas = canvasEl.current;
+                if (!canvas) {
+                  showToast('Canvas not ready for screenshot.');
+                  return;
+                }
+                try {
+                  const blob = await new Promise<Blob | null>((resolve) =>
+                    canvas.toBlob((b) => resolve(b), 'image/png'),
+                  );
+                  if (!blob) throw new Error('Could not capture canvas');
+                  await navigator.clipboard.write([
+                    new ClipboardItem({ 'image/png': blob }),
+                  ]);
+                  setScreenshotStatus('Copied!');
+                  showToast('Canvas screenshot copied to clipboard.');
+                  window.setTimeout(() => setScreenshotStatus(null), 1800);
+                } catch {
+                  // Fallback: download
+                  const url = canvas.toDataURL('image/png');
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'trussiq-canvas.png';
+                  a.click();
+                  setScreenshotStatus('Saved');
+                  showToast('Clipboard blocked — PNG downloaded instead.');
+                  window.setTimeout(() => setScreenshotStatus(null), 1800);
+                }
+              }}
+            />
+          )}
           {presentationMode && (
             <PresentationHud
               result={result}
@@ -828,8 +1096,63 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
               <p className="mt-2 border-t border-surface-700 pt-2 text-[10px] leading-4 text-surface-400">Evidence: {activeChallenge.target}</p>
             </section>
           )}
-          {showGuide && nodes.length > 0 && !result && (
-            <section className="absolute left-4 top-4 w-[min(23rem,calc(100%-2rem))] rounded-xl border border-accent/30 bg-surface-900/95 p-4 shadow-2xl shadow-black/20 backdrop-blur-sm animate-fade-in">
+          {activeBridgeChallengeId && !presentationMode && !activeChallenge && (
+            <section className="absolute right-4 top-4 z-10 w-[min(20rem,calc(100%-2rem))] rounded-xl border border-accent/35 bg-surface-900/95 p-3 shadow-xl backdrop-blur-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[9px] font-semibold uppercase tracking-wider text-accent">Active bridge challenge</p>
+                  <h3 className="mt-1 text-xs font-semibold text-surface-100">
+                    {activeBridgeChallengeId === 'high-wind-resilience'
+                      ? 'High Wind Resilience'
+                      : 'The Low-Budget Span'}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveBridgeChallengeId(null)}
+                  aria-label="Dismiss active bridge challenge"
+                  className="text-surface-500 hover:text-surface-200"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+              <p className="mt-2 text-[10px] leading-4 text-surface-400">
+                Edit the model, run FEA, then reopen Challenge to check progress.
+              </p>
+            </section>
+          )}
+          {!showTutorial && nodes.length === 0 && beams.length === 0 && !presentationMode && (
+            <section className="pointer-events-none absolute inset-0 z-[5] flex items-center justify-center p-6 animate-fade-in">
+              <div className="pointer-events-auto max-w-sm rounded-2xl border border-surface-700/90 bg-surface-900/92 px-5 py-5 text-center shadow-2xl shadow-black/25 backdrop-blur-md">
+                <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-accent">Empty canvas</p>
+                <h3 className="mt-2 text-base font-semibold text-surface-100">Start with a joint or a preset</h3>
+                <p className="mt-2 text-xs leading-5 text-surface-400">
+                  Choose <span className="text-surface-200">Node</span> and click the grid, or open <span className="text-surface-200">Presets</span> for a ready Howe / Warren / Pratt model.
+                </p>
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTool('node')}
+                    className="rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-surface-950 hover:bg-teal-400"
+                  >
+                    Place a joint
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      loadPreset('howe');
+                      setTool('select');
+                    }}
+                    className="rounded-lg border border-surface-600 px-3 py-2 text-xs font-medium text-surface-200 hover:border-accent/40 hover:text-accent"
+                  >
+                    Load Howe example
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
+          {showGuide && !showTutorial && nodes.length > 0 && !result && !activeBridgeChallengeId && !activeChallenge && (
+            <section className="absolute left-4 top-14 z-10 w-[min(23rem,calc(100%-2rem))] rounded-xl border border-accent/30 bg-surface-900/95 p-4 shadow-2xl shadow-black/20 backdrop-blur-sm animate-fade-in">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2 text-accent">
                   <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent/15">
@@ -869,14 +1192,14 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
               <div className="mt-4 flex gap-2">
                 <button
                   type="button"
-                  onClick={runSolver}
+                  onClick={() => runSolver()}
                   className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-surface-950 hover:bg-teal-300"
                 >
                   <Play size={13} fill="currentColor" /> Run first analysis
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowTutorial(true)}
+                  onClick={() => openTutorial(false)}
                   className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-surface-700 px-3 py-2 text-xs font-medium text-surface-300 hover:border-accent/50 hover:text-accent"
                 >
                   <BookOpen size={13} /> Tour
@@ -886,51 +1209,68 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
           )}
         </main>
 
-        {!presentationMode && sidebarOpen && <ResizeDivider label="Resize inspector" orientation="auto" onResize={(delta) => setSidebarWidth((width) => {
-          const phone = window.matchMedia('(max-width: 767px)').matches;
-          const next = phone
-            ? Math.max(200, Math.min(window.innerHeight - 120, width - delta))
-            : Math.max(280, Math.min(Math.min(520, window.innerWidth - 40), width - delta));
-          writeStoredValue(phone ? 'trussiq-inspector-height' : 'trussiq-inspector-width', String(next));
-          return next;
-        })} />}
-        {!presentationMode && sidebarOpen && <div className="inspector-panel" style={{ '--inspector-width': `${sidebarWidth}px`, '--inspector-height': `${sidebarWidth}px` } as CSSProperties}><Sidebar
-          materialId={materialId}
-          defaultArea={defaultArea}
-          result={result}
-          ai={ai}
-          nodes={nodes}
-          analysisNodes={dynamicNodes}
-          beams={beams}
-          selectedBeamId={selectedBeamId}
-          selectedNodeId={selectedNodeId}
-          onMaterialChange={changeMaterial}
-          onCompareMaterials={() => setShowMaterialStudy(true)}
-          onAreaChange={changeDefaultArea}
-          onSelectedBeamArea={changeSelectedBeamArea}
-          onSelectedBeamSection={changeSelectedBeamSection}
-          onSelectedNodeChange={(patch) => {
-            if (!selectedNodeId) return;
-            commit((prev) => ({
-              ...prev,
-              nodes: prev.nodes.map((node) =>
-                node.id === selectedNodeId ? { ...node, ...patch } : node,
-              ),
-            }));
-            invalidate();
-          }}
-          onOpenFormula={openFormula}
-          onFocusBeams={(ids) => {
-            setHighlightBeamIds(ids);
-            setSelectedBeamId(ids[0] ?? null);
-          }}
-          onFocusNodes={(ids) => {
-            setHighlightNodeIds(ids);
-            setSelectedNodeId(ids[0] ?? null);
-          }}
-          onRunSolver={runSolver}
-          audit={audit}
-        /></div>}
+        {!presentationMode && sidebarOpen && (
+          <ResizeDivider
+            label="Resize inspector"
+            orientation="auto"
+            onResize={(delta) => setSidebarWidth((width) => {
+              const phone = window.matchMedia('(max-width: 767px)').matches;
+              const next = phone
+                ? Math.max(200, Math.min(window.innerHeight - 120, width - delta))
+                : Math.max(280, Math.min(Math.min(520, window.innerWidth - 40), width - delta));
+              writeStoredValue(phone ? 'trussiq-inspector-height' : 'trussiq-inspector-width', String(next));
+              return next;
+            })}
+          />
+        )}
+        {!presentationMode && sidebarOpen && (
+          <div
+            className="inspector-panel"
+            style={{ '--inspector-width': `${sidebarWidth}px`, '--inspector-height': `${sidebarWidth}px` } as CSSProperties}
+          >
+            <Sidebar
+              materialId={materialId}
+              defaultArea={defaultArea}
+              result={result}
+              ai={ai}
+              nodes={nodes}
+              analysisNodes={dynamicNodes}
+              beams={beams}
+              selectedBeamId={selectedBeamId}
+              selectedNodeId={selectedNodeId}
+              onMaterialChange={changeMaterial}
+              onCompareMaterials={() => setShowMaterialStudy(true)}
+              onAreaChange={changeDefaultArea}
+              onSelectedBeamArea={changeSelectedBeamArea}
+              onSelectedBeamSection={changeSelectedBeamSection}
+              onSelectedNodeChange={(patch) => {
+                if (!selectedNodeId) return;
+                commit((prev) => ({
+                  ...prev,
+                  nodes: prev.nodes.map((node) =>
+                    node.id === selectedNodeId ? { ...node, ...patch } : node,
+                  ),
+                }));
+                invalidate();
+              }}
+              onOpenFormula={openFormula}
+              onFocusBeams={(ids) => {
+                setHighlightBeamIds(ids);
+                setSelectedBeamId(ids[0] ?? null);
+              }}
+              onFocusNodes={(ids) => {
+                setHighlightNodeIds(ids);
+                setSelectedNodeId(ids[0] ?? null);
+              }}
+              onRunSolver={runSolver}
+              audit={audit}
+              onCollapse={() => {
+                setSidebarOpen(false);
+                writeStoredValue('trussiq-sidebar-open', '0');
+              }}
+            />
+          </div>
+        )}
       </div>
 
       {forceTarget && (
@@ -948,12 +1288,11 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
       {formula && <FormulaInspector data={formula} onClose={() => setFormula(null)} />}
       {showTutorial && (
         <TutorialOverlay
-          onClose={() => setShowTutorial(false)}
-          onLoadWarren={() => {
-            loadPreset('warren');
-            setShowTutorial(false);
-          }}
+          firstRun={tutorialFirstRun}
+          onClose={closeTutorial}
+          onLoadWarren={() => loadPreset('warren')}
           onSetTool={(t) => setTool(t)}
+          onRunSolver={() => runSolver()}
         />
       )}
       {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
@@ -1012,7 +1351,7 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
             if (mode === 'none') setShowDeflection(false);
             if (mode === 'seismic') setSeismic((current) => ({ ...current, time: 0 }));
           }}
-          onOpenTutorial={() => setShowTutorial(true)}
+          onOpenTutorial={() => openTutorial(false)}
           onOpenMission={() => setShowMission(true)}
           onOpenCollaboration={() => setShowCollaboration(true)}
           onOpenPresentation={() => setPresentationMode(true)}
@@ -1021,7 +1360,12 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
           onOpenAR={() => setShowAR(true)}
           onOpenShortcuts={() => setShowShortcuts(true)}
           onExport={() => {
-            document.querySelector<HTMLButtonElement>('[aria-label="Open export and import menu"]')?.click();
+            // Defer so the palette close click does not immediately dismiss the export menu.
+            window.setTimeout(() => {
+              document
+                .querySelector<HTMLButtonElement>('[aria-label="Open export and import menu"]')
+                ?.click();
+            }, 40);
           }}
           onClear={clearAll}
           onOpenBrief={() => setShowBrief(true)}

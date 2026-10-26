@@ -28,7 +28,7 @@ const DEFAULT_BRIEF: ProjectBriefData = {
   course: '',
   objective: 'Design an efficient truss and explain its load path and analysis limits.',
   constraints: 'Compare the modeled yield limit, stability, mass, and cost; identify effects the model does not verify.',
-  audience: 'Classroom review',
+  audience: 'Middle/high school physics, robotics, and intro engineering',
   status: 'draft',
   tags: 'FEA, truss, structural engineering',
   deadline: '',

@@ -75,7 +75,7 @@ export function analyzeStructure(
       severity: 'info',
       title: 'Run the solver first',
       message:
-        'Click “Run FEA Solver” so the local rule-based coach can inspect stress, screen for buckling risk, and identify zero-force members.',
+        'Click “Run FEA” so the local rule-based coach can inspect stress, screen for buckling risk, and identify zero-force members.',
     });
     return { items, bucklingBeamIds, zeroForceBeamIds, hotNodeIds };
   }

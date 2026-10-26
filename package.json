@@ -1,18 +1,21 @@
 {
   "name": "trussiq",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "start": "vite",
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:pages": "tsc -b && vite build --base /TrussIQ/",
     "test": "tsx scripts/smoke-fea.ts",
     "lint": "oxlint",
     "check:pages-artifact": "node scripts/check-pages-artifact.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "verify": "npm run lint && npm test && npm run build"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "canvas-confetti": "^1.9.4",
     "fflate": "^0.8.3",
     "jspdf": "^4.2.1",

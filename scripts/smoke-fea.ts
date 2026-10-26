@@ -34,8 +34,9 @@ for (const source of Object.values(CAC_OFFICIAL_SOURCES)) {
   if (!submissionPrep.includes(source)) throw new Error(`Submission prep export omitted an official source: ${source}`);
 }
 if (!submissionPrep.includes(CAC_DEADLINE_NOTICE) || !submissionPrep.includes("AI USE DISCLOSURE") ||
-    !submissionPrep.includes("[ ] Submit") || !submissionPrep.includes("App: TrussIQ")) {
-  throw new Error("Submission prep export omitted deadline, checklist, app, or AI disclosure details.");
+    !submissionPrep.includes("[ ] Submit") || !submissionPrep.includes("App: TrussIQ") ||
+    !submissionPrep.includes("under-resourced classrooms") || !submissionPrep.includes("PRIVACY.md")) {
+  throw new Error("Submission prep export omitted deadline, checklist, app, purpose, privacy, or AI disclosure details.");
 }
 const storyboardText = CAC_VIDEO_STORYBOARD.map((beat) => `${beat.time} ${beat.prompt}`).join("\n");
 const storyboardEnd = CAC_VIDEO_STORYBOARD.at(-1)?.time.split("–")[1];

@@ -102,7 +102,7 @@ export function ImpactDashboard({ nodes, beams, result, ai, audit, onClose }: Im
       officialSources: CAC_OFFICIAL_SOURCES,
       deadlineNotice: CAC_DEADLINE_NOTICE,
       videoStoryboard: CAC_VIDEO_STORYBOARD,
-      analysisScope: 'Local rule-based guidance and a linear, axial-only yield check; not a structural certification or independent review.',
+      analysisScope: 'Linear, axial-only Direct Stiffness Method yield check for learning; not a structural certification. Engineering coach uses local rules by default; optional Gemini sends model context to Google only when an API key is configured.',
       recommendations: ai.items.slice(0, 3).map((item) => item.title),
       presentationScript,
     };
@@ -121,7 +121,7 @@ export function ImpactDashboard({ nodes, beams, result, ai, audit, onClose }: Im
           <div>
             <div className="flex items-center gap-2 text-accent"><Presentation size={17} /><span className="text-[10px] font-semibold uppercase tracking-[0.18em]">Challenge impact</span></div>
             <h2 className="mt-1 text-xl font-semibold text-surface-100">Turn your model into evidence</h2>
-            <p className="mt-1 text-xs text-surface-400">A starting point for explaining what you built, learned, and can demonstrate.</p>
+            <p className="mt-1 text-xs text-surface-400">Pitch: free browser FEA for classrooms that cannot afford commercial structural software. Use this panel to rehearse what you built, learned, and can demonstrate.</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close impact dashboard" className="rounded-lg border border-surface-700 p-2 text-surface-300 hover:bg-surface-800"><X size={16} /></button>
         </header>
