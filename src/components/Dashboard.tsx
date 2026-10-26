@@ -75,6 +75,9 @@ import { FeatureBar } from './FeatureBar';
 const ARViewer = lazy(() =>
   import('./ARViewer').then((m) => ({ default: m.ARViewer })),
 );
+const Truss3DEditor = lazy(() =>
+  import('./Truss3DEditor').then((m) => ({ default: m.Truss3DEditor })),
+);
 const CollapseAnimator = lazy(() =>
   import('./CollapseAnimator').then((m) => ({ default: m.CollapseAnimator })),
 );
@@ -117,6 +120,7 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showCollapse, setShowCollapse] = useState(false);
   const [showAR, setShowAR] = useState(false);
+  const [show3DEditor, setShow3DEditor] = useState(false);
   const [showCompare, setShowCompare] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
   const [presentationMode, setPresentationMode] = useState(false);
@@ -513,6 +517,7 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
         setShowShortcuts(false);
         setShowCollapse(false);
         setShowAR(false);
+        setShow3DEditor(false);
         setShowCompare(false);
         setHighlightBeamIds([]);
         setHighlightNodeIds([]);
@@ -859,7 +864,8 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
           setDynamicsMode('wind');
         }}
         onOpenCollapse={() => { setShowDemo(false); setShowMission(false); setShowCollaboration(false); setShowCompare(false); setShowAR(false); setShowImpact(false); setShowCollapse(true); }}
-        onOpenAR={() => { setShowDemo(false); setShowCollapse(false); setShowCompare(false); setShowAR(true); }}
+        onOpenAR={() => { setShowDemo(false); setShowCollapse(false); setShowCompare(false); setShow3DEditor(false); setShowAR(true); }}
+        onOpen3DEditor={() => { setShowDemo(false); setShowCollapse(false); setShowCompare(false); setShowAR(false); setShow3DEditor(true); }}
         onOpenCompare={() => { setShowDemo(false); setShowCollapse(false); setShowAR(false); setShowCompare(true); }}
         onOpenShortcuts={() => setShowShortcuts(true)}
         onOpenDemo={() => { setShowMission(false); setShowCollaboration(false); setShowImpact(false); setShowCompare(false); setShowAR(false); setShowCollapse(false); setShowDemo(true); }}
@@ -1172,7 +1178,7 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
                 <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-accent">Empty canvas</p>
                 <h3 className="mt-2 text-base font-semibold text-surface-100">Start with a joint or a preset</h3>
                 <p className="mt-2 text-xs leading-5 text-surface-400">
-                  Choose <span className="text-surface-200">Node</span> and click the grid, or open <span className="text-surface-200">Presets</span> for a ready Howe / Warren / Pratt model.
+                  Place joints by hand, build top/bottom chords from <span className="text-surface-200">Presets → Geometry tools</span>, or load a Howe / Warren / Pratt example.
                 </p>
                 <div className="mt-4 flex flex-wrap justify-center gap-2">
                   <button
@@ -1181,6 +1187,13 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
                     className="rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-surface-950 hover:bg-teal-400"
                   >
                     Place a joint
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowGeometryTools(true)}
+                    className="rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs font-medium text-accent hover:bg-accent/20"
+                  >
+                    Build chords
                   </button>
                   <button
                     type="button"
@@ -1403,6 +1416,7 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
           onOpenCompare={() => setShowCompare(true)}
           onOpenCollapse={() => setShowCollapse(true)}
           onOpenAR={() => setShowAR(true)}
+          onOpen3DEditor={() => setShow3DEditor(true)}
           onOpenShortcuts={() => setShowShortcuts(true)}
           onExport={() => {
             // Defer so the palette close click does not immediately dismiss the export menu.
@@ -1415,6 +1429,7 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
           onClear={clearAll}
           onOpenBrief={() => setShowBrief(true)}
           onOpenImpact={() => setShowImpact(true)}
+          onOpenGeometryTools={() => setShowGeometryTools(true)}
         />
       )}
       {showBrief && (
@@ -1496,7 +1511,32 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
         )}
         {showAR && (
           <ARPreviewBoundary onClose={() => setShowAR(false)}>
-            <ARViewer nodes={nodes} beams={beams} onClose={() => setShowAR(false)} />
+            <ARViewer
+              nodes={nodes}
+              beams={beams}
+              onClose={() => setShowAR(false)}
+              onEditIn3D={() => {
+                setShowAR(false);
+                setShow3DEditor(true);
+              }}
+            />
+          </ARPreviewBoundary>
+        )}
+        {show3DEditor && (
+          <ARPreviewBoundary onClose={() => setShow3DEditor(false)}>
+            <Truss3DEditor
+              state={state}
+              gridSize={gridSize}
+              onChange={(next) => {
+                commit(next);
+                invalidate();
+              }}
+              onClose={() => setShow3DEditor(false)}
+              onOpenPreview={() => {
+                setShow3DEditor(false);
+                setShowAR(true);
+              }}
+            />
           </ARPreviewBoundary>
         )}
         {showCompare && (

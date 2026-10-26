@@ -70,6 +70,7 @@ interface TopBarProps {
   onWindProfile: (profile: 'standard' | 'storm') => void;
   onOpenCollapse: () => void;
   onOpenAR: () => void;
+  onOpen3DEditor: () => void;
   onOpenCompare: () => void;
   onOpenShortcuts: () => void;
   onOpenDemo: () => void;
@@ -125,6 +126,7 @@ export function TopBar({
   onWindProfile,
   onOpenCollapse,
   onOpenAR,
+  onOpen3DEditor,
   onOpenCompare,
   onOpenShortcuts,
   onOpenDemo,
@@ -488,7 +490,8 @@ export function TopBar({
                 [
                   { label: 'Present mode', detail: 'Full-canvas classroom view', icon: MonitorPlay, run: onOpenPresentation },
                   { label: 'Compare designs', detail: 'Side-by-side result check', icon: Columns2, run: onOpenCompare },
-                  { label: '3D preview', detail: 'Orbit and export GLB', icon: Box, run: onOpenAR },
+                  { label: 'Edit in 3D', detail: 'Move joints and draw members in 3D', icon: Box, run: onOpen3DEditor },
+                  { label: '3D preview / AR', detail: 'Orbit extruded model and export GLB', icon: Box, run: onOpenAR },
                   { label: 'Collapse animation', detail: 'Plastic failure sequence', icon: Zap, run: onOpenCollapse },
                   { label: 'Mission', detail: 'Scored design goals', icon: Flag, run: onOpenMission },
                   { label: 'Team / share', detail: 'Local comments and review links', icon: Users, run: onOpenCollaboration },

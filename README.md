@@ -20,7 +20,7 @@
 - **Build** — Snap-to-grid canvas for joints, members, supports, and nodal loads; adaptive grid while zooming; pan and zoom freely.
 - **Solve** — Linear Direct Stiffness Method (`Ku = F`): axial forces, stress, yield utilization, displacements, and support reactions.
 - **Inspect** — Color-coded members, length labels, optional force labels, deflection overlay, formula inspector, and structure audit.
-- **Compare** — Materials, sections, mass/cost estimates, wind and seismic *quasi-static* load cases, side-by-side compare, 3D/GLB export.
+- **Compare** — Materials, sections, mass/cost estimates, wind and seismic *quasi-static* load cases, side-by-side compare, interactive **3D editor**, and extruded 3D/GLB preview.
 - **Learn** — Guided tour, live demo, bridge challenges, mission mode, printable lab worksheet, engineering coach (local rules by default).
 - **Classroom** — SI ↔ US display units, colorblind-safer result palette, named class-period drafts, learning portfolio export.
 - **Share** — Local drafts, `.truss` import/export, review links, PDF reports, and project brief.

@@ -32,11 +32,13 @@ interface CommandPaletteProps {
   onOpenCompare: () => void;
   onOpenCollapse: () => void;
   onOpenAR: () => void;
+  onOpen3DEditor: () => void;
   onOpenShortcuts: () => void;
   onExport: () => void;
   onClear: () => void;
   onOpenBrief: () => void;
   onOpenImpact: () => void;
+  onOpenGeometryTools: () => void;
 }
 
 interface Command {
@@ -60,11 +62,13 @@ export function CommandPalette({
   onOpenCompare,
   onOpenCollapse,
   onOpenAR,
+  onOpen3DEditor,
   onOpenShortcuts,
   onExport,
   onClear,
   onOpenBrief,
   onOpenImpact,
+  onOpenGeometryTools,
 }: CommandPaletteProps) {
   const dialogRef = useAccessibleDialog(onClose);
   const [query, setQuery] = useState('');
@@ -80,19 +84,21 @@ export function CommandPalette({
       { id: 'howe', label: 'Load Howe truss', description: 'Start from a classic classroom bridge model', group: 'Presets', icon: <Box size={15} />, run: () => onLoadPreset('howe') },
       { id: 'pratt', label: 'Load Pratt truss', description: 'Load an efficient diagonal configuration', group: 'Presets', icon: <Box size={15} />, run: () => onLoadPreset('pratt') },
       { id: 'warren', label: 'Load Warren truss', description: 'Load a repeating triangular configuration', group: 'Presets', icon: <Box size={15} />, run: () => onLoadPreset('warren') },
+      { id: 'chords', label: 'Build top & bottom chords', description: 'Open geometry tools to place deck and top chords with optional verticals', group: 'Presets', icon: <Box size={15} />, run: onOpenGeometryTools },
       { id: 'tutorial', label: 'Start classroom tutorial', description: 'Learn the editor workflow step by step', group: 'Learn', icon: <BookOpen size={15} />, run: onOpenTutorial },
       { id: 'shortcuts', label: 'Show keyboard shortcuts', description: 'View every keyboard command in TrussIQ', group: 'Learn', icon: <Keyboard size={15} />, run: onOpenShortcuts },
       { id: 'team', label: 'Open collaboration center', description: 'Share, comment, checkpoint, and review this design', group: 'Review', icon: <Users size={15} />, run: onOpenCollaboration },
       { id: 'present', label: 'Enter presentation mode', description: 'Show a clean, distraction-free analysis view', group: 'Review', icon: <MonitorPlay size={15} />, run: onOpenPresentation },
       { id: 'compare', label: 'Compare designs', description: 'Inspect two design states side by side', group: 'Review', icon: <BrainCircuit size={15} />, run: onOpenCompare },
       { id: 'collapse', label: 'Play collapse animation', description: 'Explore progressive member failure', group: 'Explore', icon: <Sparkles size={15} />, run: onOpenCollapse },
-      { id: 'ar', label: 'Open 3D viewer', description: 'Inspect and export the model in 3D', group: 'Explore', icon: <Box size={15} />, run: onOpenAR },
+      { id: 'edit3d', label: 'Edit in 3D', description: 'Move joints and draw members in an interactive 3D view', group: 'Explore', icon: <Box size={15} />, run: onOpen3DEditor },
+      { id: 'ar', label: 'Open 3D preview', description: 'Inspect the extruded model and export GLB for AR', group: 'Explore', icon: <Box size={15} />, run: onOpenAR },
       { id: 'export', label: 'Export design report', description: 'Open the export and reporting menu', group: 'Files', icon: <Download size={15} />, run: onExport },
       { id: 'clear', label: 'Clear current design', description: 'Remove all nodes and members', group: 'Files', icon: <X size={15} />, run: onClear },
       { id: 'brief', label: 'Edit project brief', description: 'Capture the objective, constraints, and story behind the design', group: 'Review', icon: <ClipboardList size={15} />, run: onOpenBrief },
       { id: 'impact', label: 'Open challenge impact dashboard', description: 'Track learning evidence and create a judge-ready project story', group: 'Review', icon: <Flag size={15} />, run: onOpenImpact },
     ],
-    [onClear, onDynamics, onExport, onLoadPreset, onOpenAR, onOpenBrief, onOpenCollaboration, onOpenCollapse, onOpenCompare, onOpenImpact, onOpenMission, onOpenPresentation, onOpenShortcuts, onOpenTutorial, onRunSolver],
+    [onClear, onDynamics, onExport, onLoadPreset, onOpen3DEditor, onOpenAR, onOpenBrief, onOpenCollaboration, onOpenCollapse, onOpenCompare, onOpenGeometryTools, onOpenImpact, onOpenMission, onOpenPresentation, onOpenShortcuts, onOpenTutorial, onRunSolver],
   );
   const filtered = commands.filter((command) => `${command.label} ${command.description} ${command.group}`.toLowerCase().includes(query.toLowerCase()));
 

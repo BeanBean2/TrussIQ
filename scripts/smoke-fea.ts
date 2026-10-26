@@ -13,6 +13,8 @@ import { buildPresentationDraft, buildSubmissionPrepText, CAC_DEADLINE_NOTICE, C
 import { formatForceDisplay, formatLengthDisplay, formatSpanDisplay } from "../src/lib/units.ts";
 import { stressColorForPalette } from "../src/lib/resultPalette.ts";
 import { scoreDesign } from "../src/lib/designScore.ts";
+import { addTrussChords, connectHorizontalChords } from "../src/lib/chordBuilder.ts";
+import { DEFAULT_AREA, DEFAULT_MATERIAL_ID } from "../src/lib/materials.ts";
 import { parseTrussFile, serializeTruss } from "../src/lib/trussIO.ts";
 import { createReviewLink, readReviewLink } from "../src/lib/reviewLink.ts";
 import { calculateEquilibriumResidual } from "../src/lib/equilibrium.ts";
@@ -59,6 +61,31 @@ if (!/^#[0-9a-f]{6}$/i.test(stressColorForPalette(1, true, "colorblind"))) {
   if (!solved.success) throw new Error("Howe solve failed before design score check.");
   const scored = scoreDesign(howe.nodes, howe.beams, solved, 50, 25);
   if (!Number.isFinite(scored.score) || scored.massKg <= 0) throw new Error("Design score helper returned invalid values.");
+}
+{
+  const empty = { nodes: [], beams: [], materialId: DEFAULT_MATERIAL_ID, defaultArea: DEFAULT_AREA };
+  const framed = addTrussChords(empty, {
+    startX: 0,
+    startY: 200,
+    bayCount: 3,
+    bayLength: 100,
+    height: 80,
+    bottom: true,
+    top: true,
+    verticals: true,
+    supports: true,
+    materialId: DEFAULT_MATERIAL_ID,
+    area: DEFAULT_AREA,
+  });
+  if (framed.nodes.length !== 8) throw new Error(`Expected 8 chord joints, got ${framed.nodes.length}`);
+  // 3 bottom + 3 top + 4 verticals = 10 members
+  if (framed.beams.length !== 10) throw new Error(`Expected 10 chord/vertical members, got ${framed.beams.length}`);
+  const pin = framed.nodes.find((n) => n.support === "pin");
+  const roller = framed.nodes.find((n) => n.support === "rollerY");
+  if (!pin || !roller) throw new Error("Chord builder did not place pin/roller supports.");
+  const jointsOnly = { ...framed, beams: [] };
+  const connected = connectHorizontalChords(jointsOnly);
+  if (connected.beams.length < 6) throw new Error("connectHorizontalChords failed to link rows.");
 }
 const storyboardText = CAC_VIDEO_STORYBOARD.map((beat) => `${beat.time} ${beat.prompt}`).join("\n");
 const storyboardEnd = CAC_VIDEO_STORYBOARD.at(-1)?.time.split("–")[1];

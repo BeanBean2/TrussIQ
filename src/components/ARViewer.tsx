@@ -11,6 +11,7 @@ interface ARViewerProps {
   nodes: Node[];
   beams: Beam[];
   onClose: () => void;
+  onEditIn3D?: () => void;
 }
 
 function disposeSceneResources(scene: THREE.Scene | null) {
@@ -33,7 +34,7 @@ function disposeSceneResources(scene: THREE.Scene | null) {
  * 3D extrusion viewer with orbit controls + GLB download for mobile WebAR
  * (open the .glb in iOS Files / Android Scene Viewer / model-viewer).
  */
-export function ARViewer({ nodes, beams, onClose }: ARViewerProps) {
+export function ARViewer({ nodes, beams, onClose, onEditIn3D }: ARViewerProps) {
   const dialogRef = useAccessibleDialog(onClose);
   const mountRef = useRef<HTMLDivElement>(null);
   const resetViewRef = useRef<() => void>(() => undefined);
@@ -239,6 +240,15 @@ export function ARViewer({ nodes, beams, onClose }: ARViewerProps) {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {onEditIn3D && (
+            <button
+              type="button"
+              onClick={onEditIn3D}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs font-medium text-accent hover:bg-accent/20"
+            >
+              Edit in 3D
+            </button>
+          )}
           <button type="button" onClick={() => resetViewRef.current()} className="inline-flex items-center gap-1.5 rounded-lg border border-surface-700 px-3 py-2 text-xs font-medium text-surface-300 hover:border-surface-500 hover:bg-surface-800" title="Fit model in view">
             <Focus size={14} /> Fit model
           </button>
