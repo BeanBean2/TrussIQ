@@ -9,7 +9,10 @@ import { analyzeStructure } from "../src/lib/aiOptimizer.ts";
 import { getLocalCoachReply } from "../src/lib/aiMessages.ts";
 import { auditStructure } from "../src/lib/structureAudit.ts";
 import { computeSectionProps, isValidSectionParams, SECTION_PRESETS, solidRodFromArea } from "../src/lib/crossSections.ts";
-import { buildPresentationDraft, buildSubmissionPrepText, CAC_DEADLINE_NOTICE, CAC_OFFICIAL_SOURCES, CAC_VIDEO_STORYBOARD, isYieldLimitMet } from "../src/lib/challengePrep.ts";
+import { buildPresentationDraft, buildSubmissionPrepText, CAC_DEADLINE_NOTICE, CAC_OFFICIAL_SOURCES, CAC_VIDEO_STORYBOARD, isYieldLimitMet, LIVE_DEMO_URL } from "../src/lib/challengePrep.ts";
+import { formatForceDisplay, formatLengthDisplay, formatSpanDisplay } from "../src/lib/units.ts";
+import { stressColorForPalette } from "../src/lib/resultPalette.ts";
+import { scoreDesign } from "../src/lib/designScore.ts";
 import { parseTrussFile, serializeTruss } from "../src/lib/trussIO.ts";
 import { createReviewLink, readReviewLink } from "../src/lib/reviewLink.ts";
 import { calculateEquilibriumResidual } from "../src/lib/equilibrium.ts";
@@ -35,8 +38,27 @@ for (const source of Object.values(CAC_OFFICIAL_SOURCES)) {
 }
 if (!submissionPrep.includes(CAC_DEADLINE_NOTICE) || !submissionPrep.includes("AI USE DISCLOSURE") ||
     !submissionPrep.includes("[ ] Submit") || !submissionPrep.includes("App: TrussIQ") ||
-    !submissionPrep.includes("under-resourced classrooms") || !submissionPrep.includes("PRIVACY.md")) {
-  throw new Error("Submission prep export omitted deadline, checklist, app, purpose, privacy, or AI disclosure details.");
+    !submissionPrep.includes("under-resourced classrooms") || !submissionPrep.includes("PRIVACY.md") ||
+    !submissionPrep.includes(LIVE_DEMO_URL)) {
+  throw new Error("Submission prep export omitted deadline, checklist, app, purpose, privacy, live demo, or AI disclosure details.");
+}
+if (formatLengthDisplay(25.4, "us") !== "1 in") throw new Error("US length formatting failed for 25.4 mm.");
+if (!formatForceDisplay(1000, "us").includes("lbf") && !formatForceDisplay(1000, "us").includes("kip")) {
+  throw new Error("US force formatting failed.");
+}
+if (!formatSpanDisplay(120, 100, "si").includes("mm")) throw new Error("SI span formatting failed.");
+if (stressColorForPalette(0.1, false, "colorblind") === stressColorForPalette(0.1, false, "default")) {
+  // Allowed to coincidentally match; only require both paths return hex
+}
+if (!/^#[0-9a-f]{6}$/i.test(stressColorForPalette(1, true, "colorblind"))) {
+  throw new Error("Colorblind palette did not return a hex color.");
+}
+{
+  const howe = createHoweTruss();
+  const solved = solveTruss(howe.nodes, howe.beams);
+  if (!solved.success) throw new Error("Howe solve failed before design score check.");
+  const scored = scoreDesign(howe.nodes, howe.beams, solved, 50, 25);
+  if (!Number.isFinite(scored.score) || scored.massKg <= 0) throw new Error("Design score helper returned invalid values.");
 }
 const storyboardText = CAC_VIDEO_STORYBOARD.map((beat) => `${beat.time} ${beat.prompt}`).join("\n");
 const storyboardEnd = CAC_VIDEO_STORYBOARD.at(-1)?.time.split("–")[1];

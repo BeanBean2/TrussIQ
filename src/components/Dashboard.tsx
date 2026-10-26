@@ -67,6 +67,9 @@ import { DemoHelper } from './DemoHelper';
 import { ResizeDivider } from './ResizeDivider';
 import { HIGH_WIND_PROFILE, type BridgeChallengeId } from '../lib/bridgeChallenges';
 import { computeStructureMetrics, type MemberViewFilter } from '../lib/structureMetrics';
+import { readResultPalette } from '../lib/resultPalette';
+import { readDisplayUnits } from '../lib/units';
+import { exportLabWorksheet } from '../lib/worksheet';
 import { FeatureBar } from './FeatureBar';
 
 const ARViewer = lazy(() =>
@@ -159,6 +162,12 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
   );
   const [showForceLabels, setShowForceLabels] = useState(
     () => readStoredValue('trussiq-force-labels') === '1',
+  );
+  const [displayUnits, setDisplayUnits] = useState(() =>
+    readDisplayUnits(readStoredValue('trussiq-display-units')),
+  );
+  const [resultPalette, setResultPalette] = useState(() =>
+    readResultPalette(readStoredValue('trussiq-result-palette')),
   );
   const [memberFilter, setMemberFilter] = useState<MemberViewFilter>('all');
   const [autoSolve, setAutoSolve] = useState(
@@ -1002,6 +1011,8 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
             highlightNodeIds={highlightNodeIds}
             showForceLabels={showForceLabels}
             memberFilter={memberFilter}
+            displayUnits={displayUnits}
+            resultPalette={resultPalette}
             canvasRefCallback={setCanvasEl}
             onSelectNode={setSelectedNodeId}
             onSelectBeam={setSelectedBeamId}
@@ -1050,6 +1061,40 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
               metrics={structureMetrics}
               screenshotStatus={screenshotStatus}
               resultStale={resultStale}
+              displayUnits={displayUnits}
+              onToggleDisplayUnits={() =>
+                setDisplayUnits((current) => {
+                  const next = current === 'si' ? 'us' : 'si';
+                  writeStoredValue('trussiq-display-units', next);
+                  showToast(next === 'us' ? 'Display units: US customary' : 'Display units: SI');
+                  return next;
+                })
+              }
+              resultPalette={resultPalette}
+              onToggleResultPalette={() =>
+                setResultPalette((current) => {
+                  const next = current === 'default' ? 'colorblind' : 'default';
+                  writeStoredValue('trussiq-result-palette', next);
+                  showToast(next === 'colorblind' ? 'Colorblind-safer palette on' : 'Default result palette');
+                  return next;
+                })
+              }
+              onExportWorksheet={() => {
+                let brief: ProjectBriefData | undefined;
+                try {
+                  const raw = readStoredValue('trussiq-project-brief');
+                  if (raw) brief = JSON.parse(raw) as ProjectBriefData;
+                } catch {
+                  brief = undefined;
+                }
+                exportLabWorksheet(state, result, {
+                  title: brief?.title,
+                  author: brief?.author,
+                  course: brief?.course,
+                  objective: brief?.objective,
+                });
+                showToast('Lab worksheet PDF downloaded.');
+              }}
               onScreenshot={async () => {
                 const canvas = canvasEl.current;
                 if (!canvas) {
@@ -1392,6 +1437,8 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
           result={result}
           ai={ai}
           audit={audit}
+          materialId={materialId}
+          defaultArea={defaultArea}
           onClose={() => setShowImpact(false)}
         />
       )}

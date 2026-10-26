@@ -1,10 +1,12 @@
 import { CheckCircle2, Download, ExternalLink, FileText, Lightbulb, Presentation, ShieldCheck, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useAccessibleDialog } from '../hooks/useAccessibleDialog';
-import { buildPresentationDraft, buildSubmissionPrepText, CAC_DEADLINE_NOTICE, CAC_OFFICIAL_SOURCES, CAC_VIDEO_STORYBOARD } from '../lib/challengePrep';
+import { buildPresentationDraft, buildSubmissionPrepText, CAC_DEADLINE_NOTICE, CAC_OFFICIAL_SOURCES, CAC_VIDEO_STORYBOARD, LIVE_DEMO_URL } from '../lib/challengePrep';
 import type { StructureAudit } from '../lib/structureAudit';
-import type { AIAnalysis, Beam, FEAResult, Node } from '../lib/types';
+import type { AIAnalysis, Beam, FEAResult, Node, StructureState } from '../lib/types';
 import { readStoredValue, writeStoredValue } from '../lib/storage';
+import { exportLabWorksheet } from '../lib/worksheet';
+import { scoreDesign } from '../lib/designScore';
 
 interface ImpactDashboardProps {
   nodes: Node[];
@@ -12,6 +14,8 @@ interface ImpactDashboardProps {
   result: FEAResult | null;
   ai: AIAnalysis;
   audit: StructureAudit;
+  materialId: string;
+  defaultArea: number;
   onClose: () => void;
 }
 
@@ -33,7 +37,7 @@ const SUBMISSION_STEPS = [
   { title: 'Complete the exit questionnaire', detail: 'After the deadline, watch for the questionnaire link. Every team member must complete it individually.' },
 ];
 
-export function ImpactDashboard({ nodes, beams, result, ai, audit, onClose }: ImpactDashboardProps) {
+export function ImpactDashboard({ nodes, beams, result, ai, audit, materialId, defaultArea, onClose }: ImpactDashboardProps) {
   const dialogRef = useAccessibleDialog(onClose);
   const [checkedGoals, setCheckedGoals] = useState<boolean[]>(() => {
     try {
@@ -90,12 +94,32 @@ export function ImpactDashboard({ nodes, beams, result, ai, audit, onClose }: Im
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
+  const designScore = useMemo(
+    () => (result?.success ? scoreDesign(nodes, beams, result, 50, 25) : null),
+    [nodes, beams, result],
+  );
+
+  const exportWorksheet = () => {
+    let brief: { title?: string; author?: string; course?: string; objective?: string } = {};
+    try {
+      const raw = readStoredValue('trussiq-project-brief');
+      if (raw) brief = JSON.parse(raw);
+    } catch {
+      brief = {};
+    }
+    const state: StructureState = { nodes, beams, materialId, defaultArea };
+    exportLabWorksheet(state, result, brief);
+  };
+
   const exportImpact = () => {
     const payload = {
-      format: 'trussiq.impact-summary',
-      version: 2,
+      format: 'trussiq.learning-portfolio',
+      version: 3,
       generatedAt: new Date().toISOString(),
+      liveDemo: LIVE_DEMO_URL,
       evidence,
+      designScore,
+      model: { nodeCount: nodes.length, memberCount: beams.length, materialId, defaultArea },
       learningGoals: LEARNING_GOALS.map((label, index) => ({ label, selfReportedComplete: checkedGoals[index] })),
       congressionalAppChallengeChecklist: SUBMISSION_STEPS.map((step, index) => ({ ...step, selfReportedComplete: submissionChecks[index] })),
       aiDisclosure,
@@ -105,11 +129,19 @@ export function ImpactDashboard({ nodes, beams, result, ai, audit, onClose }: Im
       analysisScope: 'Linear, axial-only Direct Stiffness Method yield check for learning; not a structural certification. Engineering coach uses local rules by default; optional Gemini sends model context to Google only when an API key is configured.',
       recommendations: ai.items.slice(0, 3).map((item) => item.title),
       presentationScript,
+      projectBrief: (() => {
+        try {
+          const raw = readStoredValue('trussiq-project-brief');
+          return raw ? JSON.parse(raw) : null;
+        } catch {
+          return null;
+        }
+      })(),
     };
     const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'trussiq-impact-summary.json';
+    link.download = 'trussiq-learning-portfolio.json';
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
@@ -126,11 +158,18 @@ export function ImpactDashboard({ nodes, beams, result, ai, audit, onClose }: Im
           <button type="button" onClick={onClose} aria-label="Close impact dashboard" className="rounded-lg border border-surface-700 p-2 text-surface-300 hover:bg-surface-800"><X size={16} /></button>
         </header>
 
-        <div className="grid gap-3 p-5 sm:grid-cols-3">
+        <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-4">
           <Metric label="Engineering evidence" value={result?.success ? 'Analyzed' : 'Not yet measured'} detail={evidence.safety} />
           <Metric label="Model complexity" value={`${nodes.length} nodes · ${beams.length} members`} detail={evidence.status} />
+          <Metric label="Classroom score" value={designScore ? `${designScore.score.toFixed(0)} / 100` : '—'} detail={designScore?.explanation ?? 'Run FEA to score mass vs limits'} />
           <Metric label="Learning progress" value={`${progress}/${LEARNING_GOALS.length} goals`} detail={progress === LEARNING_GOALS.length ? 'All reflections marked complete' : 'Complete your reflection'} />
         </div>
+        <p className="px-5 pb-1 text-[10px] text-surface-500">
+          Live demo for judges:{' '}
+          <a href={LIVE_DEMO_URL} target="_blank" rel="noreferrer" className="text-accent hover:text-teal-300">
+            {LIVE_DEMO_URL}
+          </a>
+        </p>
 
         <div className="grid gap-5 border-t border-surface-700 p-5 md:grid-cols-[1.05fr_0.95fr]">
           <div>
@@ -206,7 +245,10 @@ export function ImpactDashboard({ nodes, beams, result, ai, audit, onClose }: Im
 
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-surface-700 px-5 py-4">
           <p className="text-[11px] text-surface-500">Recommendations: {ai.items.length} insight{ai.items.length === 1 ? '' : 's'} available</p>
-          <button type="button" onClick={exportImpact} className="inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-surface-950 hover:bg-teal-400"><Download size={14} />Export impact summary</button>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={exportWorksheet} className="inline-flex items-center gap-2 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs font-medium text-accent hover:bg-accent/20"><FileText size={14} />Lab worksheet PDF</button>
+            <button type="button" onClick={exportImpact} className="inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-surface-950 hover:bg-teal-400"><Download size={14} />Export learning portfolio</button>
+          </div>
         </footer>
       </section>
     </div>

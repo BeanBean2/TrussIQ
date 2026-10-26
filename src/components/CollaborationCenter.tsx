@@ -17,6 +17,7 @@ import { useMemo, useState } from 'react';
 import { useAccessibleDialog } from '../hooks/useAccessibleDialog';
 import type { StructureAudit } from '../lib/structureAudit';
 import { createReviewLink } from '../lib/reviewLink';
+import { deleteDraftSlot, listDraftSlots, saveDraftSlot, type DraftSlot } from '../lib/draftSlots';
 import type { FEAResult, StructureState } from '../lib/types';
 import { readStoredValue, writeStoredValue } from '../lib/storage';
 
@@ -64,6 +65,8 @@ export function CollaborationCenter({
   const [anchor, setAnchor] = useState('Whole model');
   const [copyStatus, setCopyStatus] = useState<'copied' | 'error' | ''>('');
   const [projectName, setProjectName] = useState(() => readStoredValue('trussiq-project-name') ?? 'Untitled bridge study');
+  const [draftSlots, setDraftSlots] = useState<DraftSlot[]>(() => listDraftSlots());
+  const [slotLabel, setSlotLabel] = useState('Period A');
 
   const shareCode = useMemo(() => createReviewLink(state, window.location), [state]);
   const openComments = comments.filter((comment) => !comment.resolved).length;
@@ -242,14 +245,50 @@ export function CollaborationCenter({
           )}
 
           {tab === 'history' && (
-            <div className="space-y-2">
-              {snapshots.length === 0 && <EmptyState text="No checkpoints yet. Save one from the Room tab before experimenting." />}
-              {snapshots.map((snapshot) => (
-                <div key={snapshot.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-surface-700 bg-surface-800/50 p-3">
-                  <div><div className="text-xs font-semibold text-surface-200">{snapshot.label}</div><div className="mt-1 text-[10px] text-surface-500">{new Date(snapshot.createdAt).toLocaleString()} · {snapshot.state.nodes.length} nodes · {snapshot.state.beams.length} members</div></div>
-                  <button type="button" onClick={() => onApplySnapshot(snapshot.state)} className="rounded-lg border border-accent/40 px-3 py-2 text-[11px] text-accent hover:bg-accent/10">Restore checkpoint</button>
+            <div className="space-y-5">
+              <section className="space-y-2">
+                <PanelTitle icon={<History size={15} />} title="Named class-period drafts" />
+                <p className="text-[10px] leading-4 text-surface-500">Save up to 8 labeled models for different class periods or teams. Separate from quick checkpoints below.</p>
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    value={slotLabel}
+                    onChange={(event) => setSlotLabel(event.target.value)}
+                    aria-label="Draft slot label"
+                    placeholder="Period A"
+                    className="min-w-[10rem] flex-1 rounded-lg border border-surface-700 bg-surface-900 px-3 py-2 text-xs text-surface-100 outline-none focus:border-accent"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setDraftSlots(saveDraftSlot(slotLabel, state))}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-[11px] text-accent hover:bg-accent/20"
+                  >
+                    <Plus size={13} /> Save named draft
+                  </button>
                 </div>
-              ))}
+                {draftSlots.length === 0 && <EmptyState text="No named drafts yet. Save the current model for Period A / B before switching classes." />}
+                {draftSlots.map((slot) => (
+                  <div key={slot.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent/25 bg-surface-800/50 p-3">
+                    <div>
+                      <div className="text-xs font-semibold text-surface-200">{slot.label}</div>
+                      <div className="mt-1 text-[10px] text-surface-500">{new Date(slot.savedAt).toLocaleString()} · {slot.state.nodes.length} nodes · {slot.state.beams.length} members</div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => onApplySnapshot(slot.state)} className="rounded-lg border border-accent/40 px-3 py-2 text-[11px] text-accent hover:bg-accent/10">Restore</button>
+                      <button type="button" onClick={() => setDraftSlots(deleteDraftSlot(slot.id))} aria-label={`Delete draft ${slot.label}`} className="rounded-lg border border-surface-700 px-2 py-2 text-surface-500 hover:text-fail"><Trash2 size={13} /></button>
+                    </div>
+                  </div>
+                ))}
+              </section>
+              <section className="space-y-2">
+                <PanelTitle icon={<History size={15} />} title="Quick checkpoints" />
+                {snapshots.length === 0 && <EmptyState text="No checkpoints yet. Save one from the Room tab before experimenting." />}
+                {snapshots.map((snapshot) => (
+                  <div key={snapshot.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-surface-700 bg-surface-800/50 p-3">
+                    <div><div className="text-xs font-semibold text-surface-200">{snapshot.label}</div><div className="mt-1 text-[10px] text-surface-500">{new Date(snapshot.createdAt).toLocaleString()} · {snapshot.state.nodes.length} nodes · {snapshot.state.beams.length} members</div></div>
+                    <button type="button" onClick={() => onApplySnapshot(snapshot.state)} className="rounded-lg border border-accent/40 px-3 py-2 text-[11px] text-accent hover:bg-accent/10">Restore checkpoint</button>
+                  </div>
+                ))}
+              </section>
             </div>
           )}
         </div>

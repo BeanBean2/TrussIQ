@@ -1,6 +1,10 @@
 # Congressional App Challenge — submission packet
 
-Use this with the official portal and rulebook. In-app: **Impact** dashboard → export submission prep.
+Use this with the official portal and rulebook. In-app: **Impact** dashboard → export submission prep / learning portfolio.
+
+## Live demo
+
+**https://happypotato9001.github.io/TrussIQ/**
 
 ## One-sentence purpose
 
@@ -14,12 +18,13 @@ Follow the timed storyboard in Impact → “Plan a 1:55 demo video,” or `CAC_
 
 Suggested live path:
 
-1. Open guided demo or Howe preset.
+1. Open the live demo (or guided demo / Howe preset).
 2. Click **Run FEA**; explain one member force or yield utilization in your own words.
-3. Change one section/material or load; re-run; compare.
-4. State scope: linear, axial-only learning estimate — not construction certification.
-5. Name stack: TypeScript, React, Vite, Tailwind, Three.js; optional Gemini coach.
-6. Disclose AI assistance truthfully; describe code you personally understand (e.g. Direct Stiffness Method assembly in `feaEngine.ts`).
+3. Toggle **Units** (SI ↔ US) or **Palette** (colorblind-safer) on the feature bar; change one section/material or load; re-run; compare.
+4. Open **Impact** → download **Lab worksheet PDF** or **learning portfolio**.
+5. State scope: linear, axial-only learning estimate — not construction certification.
+6. Name stack: TypeScript, React, Vite, Tailwind, Three.js; optional Gemini coach.
+7. Disclose AI assistance truthfully; describe code you personally understand (e.g. Direct Stiffness Method assembly in `feaEngine.ts`).
 
 ## Application talking points
 
@@ -30,6 +35,13 @@ Suggested live path:
 | What I learned | How tension vs compression and supports shape a design — and how to keep educational models honest about scope. |
 | Version 2.0 | Teacher class sets, offline PWA packaging, or richer auto-graded labs. |
 
+## Classroom features to mention
+
+- Printable **lab worksheet** PDF (Impact or canvas feature bar)
+- **SI / US** display units and **colorblind-safer** member palette
+- **Named class-period drafts** (Team → History)
+- Learning **portfolio** JSON export with design score + live demo URL
+
 ## AI disclosure (edit truthfully)
 
 List every AI tool used (for example Cursor / Codex / Gemini) and what it helped with (UI, debugging, docs). Then list **your** original contributions: FEA understanding, design decisions, testing, video, and application answers. Review `THIRD_PARTY_NOTICES.md`.
@@ -37,10 +49,10 @@ List every AI tool used (for example Cursor / Codex / Gemini) and what it helped
 ## Ship checklist before portal submit
 
 - [ ] `npm run verify` passes (`lint` + `test` + `build`) on the submitted commit
+- [ ] Live demo URL works: https://happypotato9001.github.io/TrussIQ/
 - [ ] For GitHub Pages: `npm run build:pages` then `npm run check:pages-artifact`
-- [ ] README, PRIVACY.md, LICENSE, SUBMISSION.md, and THIRD_PARTY_NOTICES.md match the shipped app (including optional Gemini)
+- [ ] README, PRIVACY.md, LICENSE, SUBMISSION.md, and THIRD_PARTY_NOTICES.md match the shipped app
 - [ ] Demo video public on YouTube or Vimeo (1–3 minutes, captions on)
-- [ ] Live demo link works (`npm run preview`, or GitHub Pages after a green deploy)
 - [ ] Eligibility, team rules, and deadline confirmed in the **live** submission portal
 - [ ] Exit questionnaire plan after the deadline
 

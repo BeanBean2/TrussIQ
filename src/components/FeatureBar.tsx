@@ -11,7 +11,9 @@ import {
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { ENGINEERING_TIPS, nextTipIndex, tipForDay } from '../lib/engineeringTips';
+import type { ResultPalette } from '../lib/resultPalette';
 import type { MemberViewFilter, StructureMetrics } from '../lib/structureMetrics';
+import { formatSpanDisplay, unitSystemLabel, type DisplayUnitSystem } from '../lib/units';
 
 interface FeatureBarProps {
   showForceLabels: boolean;
@@ -26,6 +28,11 @@ interface FeatureBarProps {
   onScreenshot: () => void;
   screenshotStatus: string | null;
   resultStale?: boolean;
+  displayUnits: DisplayUnitSystem;
+  onToggleDisplayUnits: () => void;
+  resultPalette: ResultPalette;
+  onToggleResultPalette: () => void;
+  onExportWorksheet?: () => void;
 }
 
 export function FeatureBar({
@@ -41,6 +48,11 @@ export function FeatureBar({
   onScreenshot,
   screenshotStatus,
   resultStale = false,
+  displayUnits,
+  onToggleDisplayUnits,
+  resultPalette,
+  onToggleResultPalette,
+  onExportWorksheet,
 }: FeatureBarProps) {
   const [expanded, setExpanded] = useState(false);
   const [tipIndex, setTipIndex] = useState(() =>
@@ -54,7 +66,7 @@ export function FeatureBar({
         <span className="mr-1 inline-flex items-center gap-1 text-[10px] font-semibold text-accent">
           <Ruler size={11} />
           <span className="font-mono font-normal text-surface-300">
-            {metrics.spanMm.toFixed(0)}×{metrics.heightMm.toFixed(0)} mm
+            {formatSpanDisplay(metrics.spanMm, metrics.heightMm, displayUnits)}
           </span>
         </span>
         {resultStale && (
@@ -116,6 +128,30 @@ export function FeatureBar({
           <Camera size={11} />
           {screenshotStatus ?? 'Shot'}
         </button>
+        <ToggleChip
+          active={displayUnits === 'us'}
+          onClick={onToggleDisplayUnits}
+          icon={<span className="font-mono text-[9px]">{unitSystemLabel(displayUnits)}</span>}
+          label="Units"
+          title="Toggle SI (mm, N, MPa) vs US customary display"
+        />
+        <ToggleChip
+          active={resultPalette === 'colorblind'}
+          onClick={onToggleResultPalette}
+          icon={<span className="font-mono text-[9px]">CB</span>}
+          label="Palette"
+          title="Colorblind-safer member colors"
+        />
+        {onExportWorksheet && (
+          <button
+            type="button"
+            onClick={onExportWorksheet}
+            title="Download printable lab worksheet PDF"
+            className="inline-flex items-center gap-1 rounded-md border border-accent/35 bg-accent/10 px-1.5 py-1 text-[10px] text-accent hover:bg-accent/20"
+          >
+            Worksheet
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}

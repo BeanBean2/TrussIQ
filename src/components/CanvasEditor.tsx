@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Maximize2, ZoomIn, ZoomOut } from 'lucide-react';
-import { stressColor } from '../lib/feaEngine';
+import { axialLabelColors, stressColorForPalette, type ResultPalette } from '../lib/resultPalette';
 import type { MemberViewFilter } from '../lib/structureMetrics';
+import { formatForceDisplay, formatLengthDisplay, formatStressDisplay, type DisplayUnitSystem } from '../lib/units';
 import type {
   Beam,
   DynamicsMode,
@@ -153,6 +154,8 @@ interface CanvasEditorProps {
   highlightNodeIds?: string[];
   showForceLabels?: boolean;
   memberFilter?: MemberViewFilter;
+  displayUnits?: DisplayUnitSystem;
+  resultPalette?: ResultPalette;
   canvasRefCallback?: (el: HTMLCanvasElement | null) => void;
   onSelectNode: (id: string | null) => void;
   onSelectBeam: (id: string | null) => void;
@@ -183,6 +186,8 @@ export function CanvasEditor({
   highlightNodeIds = [],
   showForceLabels = false,
   memberFilter = 'all',
+  displayUnits = 'si',
+  resultPalette = 'default',
   canvasRefCallback,
   onSelectNode,
   onSelectBeam,
@@ -462,7 +467,7 @@ export function CanvasEditor({
         let color = '#94a3b8';
         let width = 3;
         if (member) {
-          color = stressColor(member.safetyRatio, member.yielded);
+          color = stressColorForPalette(member.safetyRatio, member.yielded, resultPalette);
           width = member.yielded ? 5 : 3.5;
         }
         if (selected || highlighted) {
@@ -543,7 +548,7 @@ export function CanvasEditor({
         // Length label on undeformed midspan so it stays accurate when deflection is on
         if (!filteredOut) {
           // □ count uses the drawn (zoom-adaptive) square, not the TopBar base size
-          drawMemberLabel(ctx, pi0, pj0, formatMemberLength(worldLen, gridStep), {
+          drawMemberLabel(ctx, pi0, pj0, formatMemberLength(worldLen, gridStep, displayUnits), {
             light,
             offset: showForceLabels && member ? 18 : 12,
             fill: selected || highlighted ? '#5eead4' : light ? '#334155' : '#cbd5e1',
@@ -552,11 +557,12 @@ export function CanvasEditor({
 
         // Force / stress labels follow the drawn (possibly deflected) member
         if (showForceLabels && member && !filteredOut) {
-          const label = `${member.axialForce >= 0 ? '+' : ''}${member.axialForce.toFixed(0)} N`;
+          const label = formatForceDisplay(member.axialForce, displayUnits);
+          const axialColors = axialLabelColors(resultPalette);
           drawMemberLabel(ctx, pi, pj, label, {
             light,
             offset: -14,
-            fill: member.status === 'compression' ? '#38bdf8' : '#86efac',
+            fill: member.status === 'compression' ? axialColors.compression : axialColors.tension,
           });
         }
 
@@ -580,7 +586,7 @@ export function CanvasEditor({
           ctx.stroke();
           ctx.setLineDash([]);
           const draftLen = Math.hypot(snapX - from.x, snapY - from.y);
-          drawMemberLabel(ctx, a, b, formatMemberLength(draftLen, gridStep), {
+          drawMemberLabel(ctx, a, b, formatMemberLength(draftLen, gridStep, displayUnits), {
             light,
             offset: 14,
             fill: '#5eead4',
@@ -721,6 +727,8 @@ export function CanvasEditor({
     snap,
     showForceLabels,
     memberFilter,
+    displayUnits,
+    resultPalette,
     syncViewScale,
     dynamicsMode,
     userLoadMap,
@@ -816,12 +824,12 @@ export function CanvasEditor({
       const member = memberResultMap.get(hitBeam.id);
       const ni = nodes.find((n) => n.id === hitBeam.nodeI);
       const nj = nodes.find((n) => n.id === hitBeam.nodeJ);
-      const len = ni && nj ? formatMemberLength(Math.hypot(nj.x - ni.x, nj.y - ni.y), activeGridMm) : null;
+      const len = ni && nj ? formatMemberLength(Math.hypot(nj.x - ni.x, nj.y - ni.y), activeGridMm, displayUnits) : null;
       nextTip =
         `${displayEntityId(hitBeam.id, 'M')} · ${shortId(hitBeam.nodeI)}–${shortId(hitBeam.nodeJ)}` +
         (len ? ` · L ${len}` : '') +
         (member
-          ? ` · ${member.status} ${member.axialForce.toFixed(1)} N · σ ${member.stress.toFixed(1)} MPa · util ${(member.safetyRatio * 100).toFixed(0)}%`
+          ? ` · ${member.status} ${formatForceDisplay(member.axialForce, displayUnits)} · σ ${formatStressDisplay(member.stress, displayUnits)} · util ${(member.safetyRatio * 100).toFixed(0)}%`
           : ' · not analyzed');
     }
     if (nextTip !== lastHoverRef.current) {
@@ -1020,8 +1028,10 @@ export function CanvasEditor({
               const ni = nodes.find((n) => n.id === beam.nodeI);
               const nj = nodes.find((n) => n.id === beam.nodeJ);
               const rawLen = ni && nj ? Math.hypot(nj.x - ni.x, nj.y - ni.y) : null;
-              const length = rawLen !== null ? formatMemberLength(rawLen, activeGridMm) : '—';
-              const force = member ? `${member.status} · ${member.axialForce.toPrecision(4)} N` : 'not analyzed';
+              const length = rawLen !== null ? formatMemberLength(rawLen, activeGridMm, displayUnits) : '—';
+              const force = member
+                ? `${member.status} · ${formatForceDisplay(member.axialForce, displayUnits)}`
+                : 'not analyzed';
               return <li key={beam.id}>
                 <button
                   type="button"
@@ -1131,39 +1141,19 @@ function displayEntityId(id: string, prefix: 'J' | 'M'): string {
   return label.startsWith('N') ? `${prefix}${label.slice(1)}` : `${prefix}${label}`;
 }
 
-/** Format a world-mm length without aggressive rounding that hid real diagonals. */
-function formatLength(mm: number): string {
-  const abs = Math.abs(mm);
-  if (!Number.isFinite(abs)) return '—';
-  if (abs >= 1000) {
-    const meters = abs / 1000;
-    if (Math.abs(meters - Math.round(meters)) < 1e-6) return `${Math.round(meters)} m`;
-    if (meters >= 10) return `${parseFloat(meters.toFixed(2))} m`;
-    return `${parseFloat(meters.toFixed(3))} m`;
-  }
-  // Exact (or snap-exact) integers
-  if (Math.abs(abs - Math.round(abs)) < 1e-6) return `${Math.round(abs)} mm`;
-  // Keep enough digits for diagonals like √(120²+100²) ≈ 156.20
-  if (abs >= 100) return `${abs.toFixed(1)} mm`;
-  return `${parseFloat(abs.toFixed(2))} mm`;
+function formatGridStep(mm: number): string {
+  return formatLengthDisplay(mm, 'si');
 }
 
-/** Length plus whole base-grid squares when the member lands on the snap lattice. */
-function formatMemberLength(mm: number, baseGridMm: number): string {
-  const text = formatLength(mm);
+/** Length plus whole drawn-grid squares when the member lands on the snap lattice. */
+function formatMemberLength(mm: number, baseGridMm: number, units: DisplayUnitSystem = 'si'): string {
+  const text = formatLengthDisplay(mm, units);
   if (!(baseGridMm > 0) || !Number.isFinite(mm)) return text;
   const squares = Math.abs(mm) / baseGridMm;
   if (squares >= 1 && Math.abs(squares - Math.round(squares)) < 1e-6) {
     return `${text} (${Math.round(squares)}□)`;
   }
   return text;
-}
-
-function formatGridStep(mm: number): string {
-  if (mm >= 1000) return `${formatLength(mm)}`;
-  if (Math.abs(mm - Math.round(mm)) < 1e-6) return `${Math.round(mm)} mm`;
-  if (mm >= 1) return `${parseFloat(mm.toFixed(2))} mm`;
-  return `${parseFloat(mm.toFixed(3))} mm`;
 }
 
 function formatCoord(mm: number): string {
@@ -1314,7 +1304,7 @@ function drawScaleBar(
   const pad = 12;
   const barY = h - pad - 8;
   const barX = w - pad - five;
-  const endLabel = formatLength(gridSize * squares);
+  const endLabel = formatLengthDisplay(gridSize * squares, 'si');
 
   ctx.save();
   ctx.fillStyle = light ? 'rgba(238, 242, 247, 0.9)' : 'rgba(15, 22, 32, 0.85)';

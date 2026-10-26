@@ -1,5 +1,7 @@
 import type { FEAResult } from './types';
 
+export const LIVE_DEMO_URL = 'https://happypotato9001.github.io/TrussIQ/';
+
 export const CAC_OFFICIAL_SOURCES = {
   rules: 'https://www.congressionalappchallenge.us/wp-content/uploads/2026/05/2026-CAC-Rules.pdf',
   registration: 'https://www.congressionalappchallenge.us/students/student-registration/',
@@ -49,6 +51,7 @@ export function buildSubmissionPrepText(options: {
     `Target audience: ${CAC_TARGET_AUDIENCE}`,
     'Tools and programming languages: TypeScript, React, Vite, Tailwind CSS, Three.js; optional Google Gemini API for coaching',
     'Demonstration: [show the app working — guided demo or Howe preset → Run FEA → one design change]',
+    `Live demo URL: ${LIVE_DEMO_URL}`,
     'Privacy note: Models and drafts stay in the browser by default. Optional Gemini coaching sends model context to Google only when an API key is configured (see PRIVACY.md).',
     '',
     'SUGGESTED DEMO VIDEO STORYBOARD (about 1 minute 55 seconds; personalize every line)',

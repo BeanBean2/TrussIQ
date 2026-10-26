@@ -4,6 +4,8 @@
 
 > **Purpose:** TrussIQ gives under-resourced classrooms free browser-based truss FEA so students can learn structural load paths without expensive engineering software.
 
+**Try it live:** [https://happypotato9001.github.io/TrussIQ/](https://happypotato9001.github.io/TrussIQ/)
+
 | | |
 | --- | --- |
 | **Version** | 1.0.0 |
@@ -19,8 +21,9 @@
 - **Solve** — Linear Direct Stiffness Method (`Ku = F`): axial forces, stress, yield utilization, displacements, and support reactions.
 - **Inspect** — Color-coded members, length labels, optional force labels, deflection overlay, formula inspector, and structure audit.
 - **Compare** — Materials, sections, mass/cost estimates, wind and seismic *quasi-static* load cases, side-by-side compare, 3D/GLB export.
-- **Learn** — Guided tour, live demo, bridge challenges, mission mode, engineering coach (local rules by default).
-- **Share** — Local drafts, `.truss` import/export, review links, PDF reports, project brief, and CAC Impact prep.
+- **Learn** — Guided tour, live demo, bridge challenges, mission mode, printable lab worksheet, engineering coach (local rules by default).
+- **Classroom** — SI ↔ US display units, colorblind-safer result palette, named class-period drafts, learning portfolio export.
+- **Share** — Local drafts, `.truss` import/export, review links, PDF reports, and project brief.
 
 Results are **learning estimates**, not construction design or safety certification.
 
@@ -33,7 +36,7 @@ npm install
 npm run dev
 ```
 
-Open the URL Vite prints (default `http://localhost:5173`).
+Open the URL Vite prints (default `http://localhost:5173`), or use the [live demo](https://happypotato9001.github.io/TrussIQ/).
 
 | Script | Purpose |
 | --- | --- |
@@ -43,7 +46,7 @@ Open the URL Vite prints (default `http://localhost:5173`).
 | `npm run build:pages` | Build with GitHub Pages base `/TrussIQ/` |
 | `npm run check:pages-artifact` | Verify Pages asset paths after `build:pages` |
 | `npm run preview` | Preview the production build |
-| `npm test` | FEA, equilibrium, I/O, and CAC prep checks |
+| `npm test` | FEA, equilibrium, and import/export checks |
 | `npm run lint` | Oxlint |
 
 GitHub Actions runs lint, tests, and build before deploying to Pages.
@@ -57,7 +60,7 @@ GitHub Actions runs lint, tests, and build before deploying to Pages.
 3. **Left rail** — Node, Beam, Force, Support, Erase (mobile tool dock on small screens).
 4. **Canvas** — Draw and inspect; empty state offers “Place a joint” or “Load Howe example.”
 5. **Inspector** — Materials, results, checks, coach.
-6. **Impact** — Learning goals, demo storyboard, CAC checklist export.
+6. **Impact** — Learning goals and presentation helpers.
 
 First open runs a short onboarding tour (reopen anytime from the book icon).
 
@@ -90,21 +93,12 @@ You can also paste a key in the coach panel (stored in browser local storage). P
 
 ---
 
-## Congressional App Challenge
-
-Submission packet: **[SUBMISSION.md](SUBMISSION.md)** (purpose line, video storyboard, talking points, ship checklist).
-
-In the app: open **Impact** → export submission prep. Official rules permit AI tools but require honest disclosure — record tools in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and in your portal answers. Be ready to explain the DSM solver yourself. Eligibility is determined only by the official contest portal and rulebook.
-
----
-
 ## Project docs
 
 | Doc | Contents |
 | --- | --- |
 | [PRIVACY.md](PRIVACY.md) | Local storage, share links, optional Gemini data flow |
 | [LICENSE](LICENSE) | MIT |
-| [SUBMISSION.md](SUBMISSION.md) | CAC demo script and checklist |
 | [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | Dependencies and AI assistance record |
 | `.env.example` | Gemini key template |
 
