@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { stressColor } from '../lib/feaEngine';
 import type {
   Beam,
@@ -10,8 +10,8 @@ import type {
 } from '../lib/types';
 
 const NODE_RADIUS = 7;
-const HIT_NODE = 12;
-const HIT_BEAM = 8;
+const HIT_NODE = 18;
+const HIT_BEAM = 12;
 
 interface CanvasEditorProps {
   nodes: Node[];
@@ -83,9 +83,13 @@ export function CanvasEditor({
     [gridSize],
   );
 
-  const bucklingSet = new Set(bucklingBeamIds);
-  const hlBeamSet = new Set(highlightBeamIds);
-  const hlNodeSet = new Set(highlightNodeIds);
+  const bucklingSet = useMemo(() => new Set(bucklingBeamIds), [bucklingBeamIds]);
+  const hlBeamSet = useMemo(() => new Set(highlightBeamIds), [highlightBeamIds]);
+  const hlNodeSet = useMemo(() => new Set(highlightNodeIds), [highlightNodeIds]);
+  const memberResultMap = useMemo(
+    () => new Map(result?.success ? result.members.map((member) => [member.beamId, member]) : []),
+    [result],
+  );
 
   const getWorldPos = useCallback(
     (e: React.MouseEvent | MouseEvent) => {
@@ -94,9 +98,9 @@ export function CanvasEditor({
       const rect = canvas.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
-      return { x: snap(x), y: snap(y) };
+      return { x, y };
     },
-    [snap],
+    [],
   );
 
   const findNodeAt = useCallback(
@@ -156,7 +160,7 @@ export function CanvasEditor({
     if (!canvas || !container) return;
 
     const resize = () => {
-      const dpr = window.devicePixelRatio || 1;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const { width, height } = container.getBoundingClientRect();
       canvas.width = Math.max(1, Math.floor(width * dpr));
       canvas.height = Math.max(1, Math.floor(height * dpr));
@@ -169,6 +173,7 @@ export function CanvasEditor({
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(container);
+    window.addEventListener('resize', resize);
 
     let lastFrame = performance.now();
     const draw = (now: number) => {
@@ -354,7 +359,7 @@ export function CanvasEditor({
       // Cursor ghost for node tool
       if (tool === 'node' && mouseRef.current) {
         ctx.beginPath();
-        ctx.arc(mouseRef.current.x, mouseRef.current.y, NODE_RADIUS, 0, Math.PI * 2);
+        ctx.arc(snap(mouseRef.current.x), snap(mouseRef.current.y), NODE_RADIUS, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(14, 165, 164, 0.4)';
         ctx.fill();
         ctx.strokeStyle = '#0ea5a4';
@@ -369,6 +374,7 @@ export function CanvasEditor({
     return () => {
       cancelAnimationFrame(animRef.current);
       ro.disconnect();
+      window.removeEventListener('resize', resize);
     };
   }, [
     nodes,
@@ -382,9 +388,10 @@ export function CanvasEditor({
     beamDraftFrom,
     tool,
     getDisplaced,
-    bucklingBeamIds,
-    highlightBeamIds,
-    highlightNodeIds,
+    bucklingSet,
+    hlBeamSet,
+    hlNodeSet,
+    snap,
   ]);
 
   const handleClick = (e: React.MouseEvent) => {
@@ -394,7 +401,7 @@ export function CanvasEditor({
 
     switch (tool) {
       case 'node':
-        if (!hitNode) onPlaceNode(x, y);
+        if (!hitNode) onPlaceNode(snap(x), snap(y));
         break;
       case 'beam':
         if (hitNode) onBeamClickNode(hitNode.id);
@@ -469,6 +476,14 @@ export function CanvasEditor({
       if (drag.moved) onMoveNode(drag.nodeId, drag.x, drag.y);
   };
 
+  const handlePointerCancel = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    dragRef.current = null;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+    e.currentTarget.style.cursor = cursor;
+  };
+
   const handleMouseLeave = () => {
     mouseRef.current = null;
   };
@@ -488,13 +503,12 @@ export function CanvasEditor({
         ref={canvasRef}
         role="img"
         aria-label={`Truss editor canvas. ${nodes.length} nodes and ${beams.length} members.`}
-        tabIndex={0}
-        className="absolute inset-0"
-        style={{ cursor }}
+        className="truss-canvas absolute inset-0"
+        style={{ cursor, touchAction: 'none' }}
         onClick={handleClick}
         onPointerDown={handlePointerDown}
 onPointerUp={handlePointerUp}
-onPointerCancel={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
         onContextMenu={(e) => {
@@ -502,6 +516,58 @@ onPointerCancel={handlePointerUp}
           onClearBeamDraft();
         }}
       />
+      <details
+        className="absolute right-3 top-3 z-10 w-[min(19rem,calc(100%-1.5rem))] text-xs"
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && event.currentTarget.open) {
+            event.preventDefault();
+            event.currentTarget.open = false;
+            event.currentTarget.querySelector('summary')?.focus();
+          }
+        }}
+      >
+        <summary className="w-fit cursor-pointer select-none rounded-lg border border-surface-600 bg-surface-900/95 px-3 py-2 font-medium text-surface-200 shadow-lg outline-none hover:border-accent/60 focus-visible:ring-2 focus-visible:ring-accent">
+          Structure list <span className="ml-1 text-surface-400">{nodes.length} joints · {beams.length} members</span>
+        </summary>
+        <div className="mt-2 max-h-[65vh] overflow-y-auto rounded-xl border border-surface-700 bg-surface-900/98 p-3 shadow-xl backdrop-blur">
+          <p className="mb-3 text-[10px] leading-4 text-surface-500">Select a joint or member with the keyboard or mouse. Press Escape to close this list.</p>
+          <h2 className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-surface-400">Joints</h2>
+          {nodes.length === 0 ? <p className="py-2 text-[11px] text-surface-500">No joints in this model yet.</p> : <ul className="space-y-1">
+            {nodes.map((node) => (
+              <li key={node.id}>
+                <button
+                  type="button"
+                  aria-pressed={selectedNodeId === node.id}
+                  aria-label={`Select joint ${shortId(node.id)}; x ${node.x} millimeters, y ${node.y} millimeters; support ${node.support}; horizontal load ${node.fx} newtons, vertical load ${node.fy} newtons`}
+                  onClick={() => { onSelectNode(node.id); onSelectBeam(null); }}
+                  className={`w-full rounded-md px-2 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent ${selectedNodeId === node.id ? 'bg-accent/15 text-accent' : 'text-surface-300 hover:bg-surface-800'}`}
+                >
+                  <span className="font-mono">{displayEntityId(node.id, 'J')}</span><span className="ml-2 text-[10px] text-surface-500">({node.x}, {node.y}) mm</span>
+                  {(node.support !== 'none' || node.fx !== 0 || node.fy !== 0) && <span className="ml-2 text-[10px] text-surface-400">{node.support !== 'none' ? node.support : ''}{node.fx !== 0 || node.fy !== 0 ? ` · Fx ${node.fx}, Fy ${node.fy} N` : ''}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>}
+          <h2 className="mb-1 mt-3 border-t border-surface-700 pt-3 text-[10px] font-semibold uppercase tracking-wider text-surface-400">Members</h2>
+          {beams.length === 0 ? <p className="py-2 text-[11px] text-surface-500">No members in this model yet.</p> : <ul className="space-y-1">
+            {beams.map((beam) => {
+              const member = memberResultMap.get(beam.id);
+              const force = member ? `${member.status} · ${member.axialForce.toPrecision(4)} N` : 'not analyzed';
+              return <li key={beam.id}>
+                <button
+                  type="button"
+                  aria-pressed={selectedBeamId === beam.id}
+                  aria-label={`Select member ${shortId(beam.id)}, between joints ${shortId(beam.nodeI)} and ${shortId(beam.nodeJ)}, ${force}`}
+                  onClick={() => { onSelectBeam(beam.id); onSelectNode(null); }}
+                  className={`w-full rounded-md px-2 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent ${selectedBeamId === beam.id ? 'bg-accent/15 text-accent' : 'text-surface-300 hover:bg-surface-800'}`}
+                >
+                  <span className="font-mono">{displayEntityId(beam.id, 'M')}</span><span className="ml-2 text-[10px] text-surface-500">{shortId(beam.nodeI)}–{shortId(beam.nodeJ)}</span><span className="ml-2 text-[10px] text-surface-400">{force}</span>
+                </button>
+              </li>;
+            })}
+          </ul>}
+        </div>
+      </details>
       {nodes.length === 0 && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6">
           <div className="max-w-sm rounded-xl border border-surface-700 bg-surface-900/90 px-5 py-4 text-center shadow-lg backdrop-blur">
@@ -525,6 +591,11 @@ onPointerCancel={handlePointerUp}
 function shortId(id: string): string {
   const parts = id.split('_');
   return parts.length >= 2 ? `N${parts[parts.length - 1]}` : id.slice(-4);
+}
+
+function displayEntityId(id: string, prefix: 'J' | 'M'): string {
+  const label = shortId(id);
+  return label.startsWith('N') ? `${prefix}${label.slice(1)}` : `${prefix}${label}`;
 }
 
 function drawGrid(

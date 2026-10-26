@@ -1,5 +1,5 @@
 /**
- * Official Engineering PDF Report — jsPDF + optional canvas screenshot.
+ * Educational structural study PDF — jsPDF + optional canvas screenshot.
  */
 
 import { jsPDF } from 'jspdf';
@@ -18,7 +18,7 @@ export interface ReportOptions {
 
 export async function generateOfficialReport(opts: ReportOptions): Promise<void> {
   const {
-    name = 'TrussIQ Official Engineering Report',
+    name = 'TrussIQ Structural Study Report',
     state,
     result,
     ai,
@@ -68,7 +68,7 @@ export async function generateOfficialReport(opts: ReportOptions): Promise<void>
   pdf.text('TrussIQ', margin, 12);
   pdf.setFontSize(11);
   pdf.setFont('helvetica', 'normal');
-  pdf.text('Official Engineering Analysis Report', margin, 20);
+  pdf.text('Educational Structural Analysis Report', margin, 20);
   y = 36;
 
   p(`Generated: ${new Date().toLocaleString()}`, 8, [100, 116, 139]);
@@ -115,17 +115,19 @@ export async function generateOfficialReport(opts: ReportOptions): Promise<void>
     p(`Global status: NOT SOLVED — ${result?.message ?? 'Run FEA first.'}`, 9, [180, 83, 9]);
   } else if (result.passed) {
     p(
-      `Global status: PASSED (Structurally Sound) — peak |σ|/σ_yield = ${(result.maxSafetyRatio * 100).toFixed(1)}%`,
+      `Yield check: BELOW YIELD — peak |σ|/σ_yield = ${(result.maxSafetyRatio * 100).toFixed(1)}%`,
       9,
       [22, 163, 74],
     );
   } else {
     p(
-      `Global status: FAILED (Member Yield) — peak |σ|/σ_yield = ${(result.maxSafetyRatio * 100).toFixed(1)}%`,
+      `Yield check: EXCEEDED — peak |σ|/σ_yield = ${(result.maxSafetyRatio * 100).toFixed(1)}%`,
       9,
       [220, 38, 38],
     );
   }
+  y += 3;
+  p('Scope: educational linear, axial-only truss analysis. Below-yield results do not establish overall structural safety. Buckling is screened separately; connections, bracing, fatigue, and building-code requirements are not verified.', 8, [100, 116, 139]);
   y += 3;
 
   // --- Member table ---
@@ -152,9 +154,9 @@ export async function generateOfficialReport(opts: ReportOptions): Promise<void>
   y += 3;
 
   // --- AI recommendations ---
-  h('4. AI Optimization Summary', 12);
+  h('4. Local Rule-Based Engineering Guidance', 12);
   if (!ai || ai.items.length === 0) {
-    p('No AI recommendations available.');
+    p('No guidance available for this model.');
   } else {
     for (const item of ai.items) {
       ensure(14);
@@ -183,7 +185,7 @@ export async function generateOfficialReport(opts: ReportOptions): Promise<void>
 }
 
 function sanitize(name: string): string {
-  return name.replace(/[^\w\-]+/g, '_').slice(0, 64) || 'trussiq_report';
+  return name.replace(/[^\w-]+/g, '_').slice(0, 64) || 'trussiq_report';
 }
 
 /** Capture an HTMLCanvasElement as a PNG data URL. */

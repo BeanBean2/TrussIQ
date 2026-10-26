@@ -1,15 +1,18 @@
 import { AlertTriangle, ArrowRight, CheckCircle2, Gauge, XCircle } from 'lucide-react';
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import type { SectionParams } from '../lib/crossSections';
 import { solidRodFromArea } from '../lib/crossSections';
 import { MATERIALS } from '../lib/materials';
+import { isYieldLimitMet } from '../lib/challengePrep';
+import { calculateEquilibriumResidual } from '../lib/equilibrium';
 import type { AIAnalysis, Beam, FEAResult, Node } from '../lib/types';
 import type { StructureAudit } from '../lib/structureAudit';
 import { AIAdvisor } from './AIAdvisor';
-import { AnalyticsPanel } from './AnalyticsPanel';
 import { AuditPanel } from './AuditPanel';
 import { GlossaryTooltip } from './GlossaryTooltip';
 import { SectionEditor } from './SectionEditor';
+
+const AnalyticsPanel = lazy(() => import('./AnalyticsPanel').then((module) => ({ default: module.AnalyticsPanel })));
 
 interface SidebarProps {
   materialId: string;
@@ -17,10 +20,12 @@ interface SidebarProps {
   result: FEAResult | null;
   ai: AIAnalysis;
   nodes: Node[];
+  analysisNodes: Node[];
   beams: Beam[];
   selectedBeamId: string | null;
   selectedNodeId: string | null;
   onMaterialChange: (id: string) => void;
+  onCompareMaterials: () => void;
   onAreaChange: (area: number) => void;
   onSelectedBeamArea: (area: number) => void;
   onSelectedBeamSection: (section: SectionParams, materialId: string) => void;
@@ -40,10 +45,12 @@ export function Sidebar({
   result,
   ai,
   nodes,
+  analysisNodes,
   beams,
   selectedBeamId,
   selectedNodeId,
   onMaterialChange,
+  onCompareMaterials,
   onAreaChange,
   onSelectedBeamArea,
   onSelectedBeamSection,
@@ -58,17 +65,21 @@ export function Sidebar({
   const selectedBeam = beams.find((b) => b.id === selectedBeamId) ?? null;
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) ?? null;
   const mat = MATERIALS.find((m) => m.id === materialId);
+  const equilibrium = result?.success
+    ? calculateEquilibriumResidual(analysisNodes, beams, result)
+    : null;
+  const equilibriumBalanced = equilibrium !== null && equilibrium.relative <= 1e-6;
 
   return (
-    <aside className="absolute inset-y-0 right-0 z-20 flex w-[min(22rem,calc(100vw-3.5rem))] max-w-full shrink-0 flex-col border-l border-surface-700 bg-surface-900 shadow-2xl shadow-black/25 lg:static lg:w-[22rem] lg:shadow-none">
+    <aside className="inspector-content absolute inset-y-0 right-0 z-20 flex w-[min(22rem,calc(100vw-3.5rem))] max-w-full shrink-0 flex-col border-l border-surface-700 bg-surface-900 shadow-2xl shadow-black/25 lg:static lg:w-[22rem] lg:shadow-none">
       <div className="flex border-b border-surface-700">
         {(
           [
-            ['health', 'Health'],
-            ['inspect', 'Inspect'],
-            ['analytics', 'Analytics'],
-            ['audit', 'Audit'],
-            ['ai', 'AI'],
+            ['health', 'Overview'],
+            ['inspect', 'Design'],
+            ['analytics', 'Results'],
+            ['audit', 'Checks'],
+            ['ai', 'Coach'],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -113,7 +124,7 @@ export function Sidebar({
         {tab === 'inspect' && (
           <>
             <section className="space-y-2">
-              <label className="text-xs font-medium text-surface-300">Material Preset</label>
+              <div className="flex items-center justify-between"><label className="text-xs font-medium text-surface-300">Material</label><button type="button" onClick={onCompareMaterials} className="text-[10px] font-medium text-accent hover:text-teal-300">Compare options</button></div>
               <select
                 value={materialId}
                 onChange={(e) => onMaterialChange(e.target.value)}
@@ -143,7 +154,7 @@ export function Sidebar({
             <section className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-medium text-surface-300">
-                  {selectedBeam ? 'Selected Beam Area' : 'Default Cross-Section'}
+                  {selectedBeam ? 'Selected member area' : 'Default Cross-Section'}
                 </label>
                 <span className="font-mono text-xs text-accent">
                   {(selectedBeam?.area ?? defaultArea).toFixed(0)} mm²
@@ -179,7 +190,21 @@ export function Sidebar({
                       <NodeNumberInput label="Force Y (N)" value={selectedNode.fy} onChange={(value) => onSelectedNodeChange({ fy: value })} />
                     </div>
                     <div className="rounded-md border border-surface-700 bg-surface-900/50 px-2 py-1.5 font-mono text-[10px] text-surface-500">
-                      Support: <span className="text-surface-300">{selectedNode.support}</span>
+                      <label className="flex items-center justify-between gap-2">
+                        <span>Support</span>
+                        <select
+                          value={selectedNode.support}
+                          onChange={(event) => onSelectedNodeChange({ support: event.target.value as Node['support'] })}
+                          className="rounded border border-surface-700 bg-surface-800 px-1.5 py-1 text-surface-200"
+                          aria-label={`Support condition for ${selectedNode.id}`}
+                        >
+                          <option value="none">Free</option>
+                          <option value="pin">Pin</option>
+                          <option value="rollerX">X roller</option>
+                          <option value="rollerY">Y roller</option>
+                          <option value="fixed">Fixed</option>
+                        </select>
+                      </label>
                     </div>
                   </div>
                 )}
@@ -232,18 +257,22 @@ export function Sidebar({
               ) : result.passed ? (
                 <div className="flex items-center gap-2 rounded-lg border border-pass/40 bg-pass/10 px-3 py-2.5 text-sm font-semibold text-pass">
                   <CheckCircle2 size={18} />
-                  PASSED — Structurally Sound
+                  YIELD CHECK PASSED
                 </div>
               ) : (
                 <div className="flex items-center gap-2 rounded-lg border border-fail/40 bg-fail/10 px-3 py-2.5 text-sm font-semibold text-fail animate-pulse-glow">
                   <XCircle size={18} />
-                  FAILED — Member Yield
+                  YIELD LIMIT EXCEEDED
                 </div>
               )}
+              {result?.success && <p className="mt-2 text-[10px] leading-4 text-surface-500">This checks linear axial stress against yield only. Buckling is estimated separately; joints, bracing, fatigue, and building-code requirements are not verified.</p>}
             </section>
 
             <section>
-              <h3 className="mb-2 text-xs font-medium text-surface-300">Member Results</h3>
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-xs font-medium text-surface-300">Member Results</h3>
+                {result?.success && <button type="button" onClick={() => downloadMemberCsv(result)} className="rounded border border-surface-700 px-2 py-1 text-[10px] text-surface-300 hover:border-accent/50 hover:text-accent">Export CSV</button>}
+              </div>
               {!result?.success || result.members.length === 0 ? (
                 <p className="text-xs text-surface-500">No member data yet.</p>
               ) : (
@@ -254,7 +283,7 @@ export function Sidebar({
                         <th className="px-2 py-1.5 font-medium">ID</th>
                         <th className="px-2 py-1.5 font-medium">N (N)</th>
                         <th className="px-2 py-1.5 font-medium">σ</th>
-                        <th className="px-2 py-1.5 font-medium">SF</th>
+                        <th className="px-2 py-1.5 font-medium" title="Yield safety factor: material yield stress divided by absolute member stress">Yield SF</th>
                         <th className="px-2 py-1.5 font-medium">Type</th>
                       </tr>
                     </thead>
@@ -301,16 +330,34 @@ export function Sidebar({
                 </div>
               )}
             </section>
+
+            {result?.success && result.reactions && equilibrium && (
+              <section>
+                <h3 className="mb-2 text-xs font-medium text-surface-300">Support Reactions</h3>
+                <div className="overflow-hidden rounded-lg border border-surface-700">
+                  <table className="w-full text-left text-[10px]">
+                    <thead className="bg-surface-800 text-surface-400"><tr><th className="px-2 py-1.5">Node</th><th className="px-2 py-1.5">Rx (N)</th><th className="px-2 py-1.5">Ry (N)</th></tr></thead>
+                    <tbody className="font-mono">{result.reactions.filter((reaction) => Math.abs(reaction.fx) > 1e-8 || Math.abs(reaction.fy) > 1e-8).map((reaction) => <tr key={reaction.nodeId} className="border-t border-surface-800 text-surface-300"><td className="px-2 py-1.5">{reaction.nodeId}</td><td className="px-2 py-1.5">{reaction.fx.toFixed(1)}</td><td className="px-2 py-1.5">{reaction.fy.toFixed(1)}</td></tr>)}</tbody>
+                  </table>
+                </div>
+                <p className={`mt-2 text-[10px] ${equilibriumBalanced ? 'text-pass' : 'text-warn'}`}>
+                  Joint force-balance check: {equilibriumBalanced ? 'within numerical tolerance' : 'above numerical tolerance'} · max imbalance {equilibrium.maxForceN.toExponential(2)} N ({(equilibrium.relative * 100).toExponential(2)}% of peak model force){equilibrium.nodeId ? ` at ${equilibrium.nodeId}` : ''}
+                </p>
+                <p className="mt-1 text-[10px] leading-4 text-surface-500">This numerical check covers force balance only; it does not verify yield, buckling, connections, or overall structural safety.</p>
+              </section>
+            )}
           </>
         )}
 
         {tab === 'analytics' && (
-          <AnalyticsPanel
-            nodes={nodes}
-            beams={beams}
-            result={result}
-            materialId={materialId}
-          />
+          <Suspense fallback={<p className="py-8 text-center text-xs text-surface-400">Loading analysis charts...</p>}>
+            <AnalyticsPanel
+              nodes={nodes}
+              beams={beams}
+              result={result}
+              materialId={materialId}
+            />
+          </Suspense>
         )}
 
         {tab === 'audit' && (
@@ -321,16 +368,32 @@ export function Sidebar({
           />
         )}
 
-        {tab === 'ai' && (
+        <div hidden={tab !== 'ai'}>
           <AIAdvisor
             analysis={ai}
+            result={result}
+            nodes={analysisNodes}
             onFocusBeams={onFocusBeams}
             onFocusNodes={onFocusNodes}
           />
-        )}
+        </div>
       </div>
     </aside>
   );
+}
+
+function downloadMemberCsv(result: FEAResult): void {
+  const rows = [
+    ['Member ID', 'Axial Force (N)', 'Stress (MPa)', 'Yield Utilization (|stress| / yield)', 'Status', 'Length (mm)', 'Yielded'],
+    ...result.members.map((member) => [member.beamId, member.axialForce, member.stress, member.safetyRatio, member.status, member.length, member.yielded]),
+  ];
+  const csv = rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'trussiq-member-results.csv';
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function NodeNumberInput({
@@ -382,6 +445,7 @@ function HealthPanel({
   const safety = result?.success
     ? Math.max(0, Math.round(25 * Math.min(1, 1 / Math.max(result.maxSafetyRatio, 0.01))))
     : 0;
+  const yieldLimitMet = isYieldLimitMet(result);
   const insight = result?.success && ai.bucklingBeamIds.length === 0 ? 25 : result?.success ? 15 : 0;
   const score = geometry + analysis + safety + insight;
   const tone = score >= 85 ? 'text-pass' : score >= 55 ? 'text-warn' : 'text-accent';
@@ -392,8 +456,8 @@ function HealthPanel({
       <section className="rounded-xl border border-accent/25 bg-gradient-to-br from-accent/15 to-surface-800/50 p-4">
         <div className="flex items-start justify-between">
           <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Design health</p>
-            <h2 className="mt-1 text-lg font-semibold text-surface-100">Readiness score</h2>
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Model review</p>
+            <h2 className="mt-1 text-lg font-semibold text-surface-100">Learning checklist score</h2>
           </div>
           <Gauge size={20} className={tone} />
         </div>
@@ -405,16 +469,16 @@ function HealthPanel({
           <div className={`h-full rounded-full transition-all duration-500 ${score >= 85 ? 'bg-pass' : score >= 55 ? 'bg-warn' : 'bg-accent'}`} style={{ width: `${score}%` }} />
         </div>
         <p className="mt-3 text-xs leading-5 text-surface-400">
-          {score >= 85 ? 'Ready to explain, compare, or present this design.' : 'Complete the checks below to make this design review-ready.'}
+          {score >= 85 ? 'Most model checks are complete; explain the assumptions and remaining limits.' : 'Complete these learning checks to review the model.'} This score is not a structural rating.
         </p>
       </section>
 
       <section className="space-y-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-surface-400">Readiness checks</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-surface-400">Model checks</h3>
         <HealthCheck done={geometry === 25} label="Geometry audit" detail={audit.errors ? `${audit.errors} error(s) need attention` : 'No blocking geometry errors'} />
         <HealthCheck done={analysis === 25} label="FEA analysis" detail={result?.success ? 'Solver completed successfully' : 'Run the solver to unlock results'} />
-        <HealthCheck done={safety >= 20} label="Safety margin" detail={result?.success ? `Peak utilization ${(result.maxSafetyRatio * 100).toFixed(0)}%` : 'Waiting for analysis'} />
-        <HealthCheck done={insight === 25} label="Engineering insight" detail={ai.bucklingBeamIds.length ? `${ai.bucklingBeamIds.length} buckling risk(s) detected` : 'No buckling risks flagged'} />
+        <HealthCheck done={yieldLimitMet} label="Yield limit" detail={result?.success ? `${result.maxSafetyRatio >= 1 ? 'Exceeded' : 'Below limit'} · peak use ${(result.maxSafetyRatio * 100).toFixed(0)}%` : 'Waiting for analysis'} />
+        <HealthCheck done={Boolean(result?.success)} label="Buckling estimate" detail={ai.bucklingBeamIds.length ? `${ai.bucklingBeamIds.length} heuristic flag(s); review assumptions` : 'No heuristic flags; buckling is not certified'} />
       </section>
 
       {nextIssue && (

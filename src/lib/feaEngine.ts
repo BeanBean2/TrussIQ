@@ -14,7 +14,8 @@
  * Then EA/L has units N/mm, × displacement(mm) → force(N). ✓
  */
 
-import { getMaterial } from './materials';
+import { getMaterial, MATERIALS } from './materials';
+import { computeSectionProps, isValidSectionParams } from './crossSections';
 import { solveLinearSystem, zeros } from './math';
 import type {
   Beam,
@@ -69,7 +70,8 @@ function elementStiffness(
   const s = dy / L;
   // E [GPa] → N/mm²
   const E = E_GPa * 1000;
-  const EA_over_L = (E * A_mm2) / L;
+  const EA_over_L = E * (A_mm2 / L);
+  if (!Number.isFinite(EA_over_L) || EA_over_L <= 0) return null;
 
   const c2 = c * c;
   const s2 = s * s;
@@ -91,27 +93,16 @@ function elementStiffness(
  */
 export function solveTruss(nodes: Node[], beams: Beam[]): FEAResult {
   if (nodes.length === 0) {
-    return {
-      success: false,
-      unstable: false,
-      message: 'Add nodes and members before running the solver.',
-      members: [],
-      displacements: [],
-      maxSafetyRatio: 0,
-      passed: false,
-    };
+    return failedResult('Add nodes and members before running the solver.');
   }
 
   if (beams.length === 0) {
-    return {
-      success: false,
-      unstable: false,
-      message: 'Add at least one beam (member) connecting two nodes.',
-      members: [],
-      displacements: [],
-      maxSafetyRatio: 0,
-      passed: false,
-    };
+    return failedResult('Add at least one beam (member) connecting two nodes.');
+  }
+
+  const invalidModel = validateModel(nodes, beams);
+  if (invalidModel) {
+    return failedResult(invalidModel);
   }
 
   const nodeIndex = new Map(nodes.map((n, i) => [n.id, i]));
@@ -148,7 +139,7 @@ export function solveTruss(nodes: Node[], beams: Beam[]): FEAResult {
     const nj = nodes[jIdx];
     const mat = getMaterial(beam.materialId);
     const es = elementStiffness(ni.x, ni.y, nj.x, nj.y, mat.E, beam.area);
-    if (!es) continue;
+    if (!es) return failedResult(`Member ${beam.id} is outside the solver's supported numeric range.`);
 
     const { k, L, c, s, EA_over_L } = es;
     elemData.push({ beam, L, c, s, EA_over_L, iIdx, jIdx });
@@ -158,6 +149,7 @@ export function solveTruss(nodes: Node[], beams: Beam[]): FEAResult {
     for (let a = 0; a < 4; a++) {
       for (let b = 0; b < 4; b++) {
         K[dofs[a]][dofs[b]] += k[a][b];
+        if (!Number.isFinite(K[dofs[a]][dofs[b]])) return failedResult('The model exceeds the solver numeric range. Reduce member areas or coordinate magnitudes.');
       }
     }
   }
@@ -174,29 +166,13 @@ export function solveTruss(nodes: Node[], beams: Beam[]): FEAResult {
   }
 
   if (freeCount === 0) {
-    return {
-      success: false,
-      unstable: false,
-      message: 'All degrees of freedom are constrained. Release some supports.',
-      members: [],
-      displacements: [],
-      maxSafetyRatio: 0,
-      passed: false,
-    };
+    return failedResult('All degrees of freedom are constrained. Release some supports.');
   }
 
   // Check that at least some support exists (otherwise pure rigid-body)
   const hasSupport = nodes.some((n) => n.support !== 'none');
   if (!hasSupport) {
-    return {
-      success: false,
-      unstable: true,
-      message: 'Unstable Structure: Add more supports to prevent rigid body motion.',
-      members: [],
-      displacements: [],
-      maxSafetyRatio: 0,
-      passed: false,
-    };
+    return failedResult('Unstable structure: add supports to prevent rigid body motion.', true);
   }
 
   // --- Reduce system to free DOFs ---
@@ -216,19 +192,24 @@ export function solveTruss(nodes: Node[], beams: Beam[]): FEAResult {
     }
   }
 
-  // --- Solve K_red · u_red = F_red ---
-  const uRed = solveLinearSystem(Kred, Fred);
-  if (uRed === null) {
-    return {
-      success: false,
-      unstable: true,
-      message: 'Unstable Structure: Add more supports to prevent rigid body motion.',
-      members: [],
-      displacements: [],
-      maxSafetyRatio: 0,
-      passed: false,
-    };
+  // Normalize the stiffness matrix so the linear solver's pivot tolerance is
+  // independent of the model's chosen units and member sizes.
+  let stiffnessScale = 0;
+  for (const row of Kred) {
+    for (const value of row) stiffnessScale = Math.max(stiffnessScale, Math.abs(value));
   }
+  if (!Number.isFinite(stiffnessScale)) return failedResult('The model exceeds the solver numeric range. Reduce member areas or coordinate magnitudes.');
+  if (stiffnessScale === 0) return failedResult('Unstable structure: the free degrees of freedom have no stiffness.', true);
+  const normalizedK = Kred.map((row) => row.map((value) => value / stiffnessScale));
+  const normalizedF = Fred.map((value) => value / stiffnessScale);
+  if (!normalizedF.every(Number.isFinite)) return failedResult('The model exceeds the solver numeric range. Reduce applied loads or member stiffness.');
+
+  // --- Solve K_red · u_red = F_red ---
+  const uRed = solveLinearSystem(normalizedK, normalizedF);
+  if (uRed === null) {
+    return failedResult('Unstable structure: check support placement and triangulation; the model may contain an internal mechanism.', true);
+  }
+  if (!uRed.every(Number.isFinite)) return failedResult('The calculated displacement exceeds the solver numeric range. Check loads, dimensions, and member sizes.');
 
   // Expand to full displacement vector (constrained DOFs = 0)
   const u = Array(ndof).fill(0);
@@ -253,6 +234,7 @@ export function solveTruss(nodes: Node[], beams: Beam[]): FEAResult {
       ? K[2 * i + 1].reduce((sum, value, j) => sum + value * u[j], 0) - F[2 * i + 1]
       : 0,
   }));
+  if (!reactions.every((reaction) => Number.isFinite(reaction.fx) && Number.isFinite(reaction.fy))) return failedResult('The calculated support reactions exceed the solver numeric range.');
 
   // --- Member forces & stresses ---
   // Axial force: N = (EA/L) · [(ux2−ux1)c + (uy2−uy1)s]
@@ -260,6 +242,7 @@ export function solveTruss(nodes: Node[], beams: Beam[]): FEAResult {
   const members: MemberResult[] = [];
   let maxSafetyRatio = 0;
   let anyYielded = false;
+  let maxAxialForce = 0;
 
   for (const ed of elemData) {
     const ux1 = u[2 * ed.iIdx];
@@ -272,24 +255,29 @@ export function solveTruss(nodes: Node[], beams: Beam[]): FEAResult {
     const stress = axialForce / ed.beam.area; // N/mm² = MPa
     const mat = getMaterial(ed.beam.materialId);
     const safetyRatio = Math.abs(stress) / mat.sigmaYield;
+    if (![delta, axialForce, stress, safetyRatio].every(Number.isFinite)) return failedResult('The calculated member result exceeds the solver numeric range. Check loads, dimensions, and member sizes.');
     const yielded = safetyRatio >= 1;
     if (yielded) anyYielded = true;
     if (safetyRatio > maxSafetyRatio) maxSafetyRatio = safetyRatio;
 
-    let status: MemberResult['status'] = 'zero';
-    if (Math.abs(stress) < 1e-6) status = 'zero';
-    else if (stress > 0) status = 'tension';
-    else status = 'compression';
+    maxAxialForce = Math.max(maxAxialForce, Math.abs(axialForce));
 
     members.push({
       beamId: ed.beam.id,
       axialForce,
       stress,
       safetyRatio,
-      status,
+      status: axialForce > 0 ? 'tension' : axialForce < 0 ? 'compression' : 'zero',
       length: ed.L,
       yielded,
     });
+  }
+
+  // Classify near-zero forces relative to this load case. An absolute stress
+  // cutoff made identical linear models change labels when loads were scaled.
+  const zeroForceTolerance = maxAxialForce * 1e-10;
+  for (const member of members) {
+    if (Math.abs(member.axialForce) <= zeroForceTolerance) member.status = 'zero';
   }
 
   return {
@@ -301,6 +289,46 @@ export function solveTruss(nodes: Node[], beams: Beam[]): FEAResult {
     maxSafetyRatio,
     passed: !anyYielded,
   };
+}
+
+function failedResult(message: string, unstable = false): FEAResult {
+  return { success: false, unstable, message, members: [], displacements: [], maxSafetyRatio: 0, passed: false };
+}
+
+function validateModel(nodes: Node[], beams: Beam[]): string | null {
+  const nodeIds = new Set<string>();
+  for (const node of nodes) {
+    if (!node.id || nodeIds.has(node.id)) return `Node IDs must be present and unique (${node.id || 'unnamed node'}).`;
+    nodeIds.add(node.id);
+    if (![node.x, node.y, node.fx, node.fy].every(Number.isFinite)) return `Node ${node.id} has a non-finite coordinate or load.`;
+    if (!['none', 'pin', 'rollerX', 'rollerY', 'fixed'].includes(node.support)) return `Node ${node.id} has an unsupported boundary condition.`;
+  }
+
+  const beamIds = new Set<string>();
+  for (const beam of beams) {
+    if (!beam.id || beamIds.has(beam.id)) return `Member IDs must be present and unique (${beam.id || 'unnamed member'}).`;
+    beamIds.add(beam.id);
+    if (!nodeIds.has(beam.nodeI) || !nodeIds.has(beam.nodeJ)) return `Member ${beam.id} references a node that is missing from the model.`;
+    if (beam.nodeI === beam.nodeJ) return `Member ${beam.id} connects a node to itself.`;
+    const start = nodes.find((node) => node.id === beam.nodeI)!;
+    const end = nodes.find((node) => node.id === beam.nodeJ)!;
+    const length = Math.hypot(end.x - start.x, end.y - start.y);
+    if (!Number.isFinite(length)) return `Member ${beam.id} has coordinates outside the solver's numeric range.`;
+    if (length < 1e-9) return `Member ${beam.id} has zero length. Move one of its nodes or remove the member.`;
+    if (!Number.isFinite(beam.area) || beam.area <= 0) return `Member ${beam.id} needs a positive finite cross-sectional area.`;
+    if (beam.I !== undefined && (!Number.isFinite(beam.I) || beam.I <= 0)) return `Member ${beam.id} needs a positive finite moment of inertia for its buckling estimate.`;
+    if (beam.section !== undefined) {
+      if (!isValidSectionParams(beam.section)) return `Member ${beam.id} has invalid cross-section dimensions.`;
+      const properties = computeSectionProps(beam.section);
+      const close = (actual: number, expected: number) => Math.abs(actual - expected) <= Math.max(Math.abs(expected) * 1e-6, 1e-9);
+      if (!close(beam.area, properties.area) || (beam.I !== undefined && !close(beam.I, properties.I))) {
+        return `Member ${beam.id} section dimensions do not match its area or moment of inertia. Reapply the section in the editor.`;
+      }
+    }
+    const material = MATERIALS.find((item) => item.id === beam.materialId);
+    if (!material || !Number.isFinite(material.E) || material.E <= 0 || !Number.isFinite(material.sigmaYield) || material.sigmaYield <= 0) return `Member ${beam.id} has an unknown or invalid material.`;
+  }
+  return null;
 }
 
 /** Map safety ratio → heatmap color (CSS hex). */

@@ -1,4 +1,5 @@
 import type { Beam, Node } from './types';
+import { computeSectionProps, isValidSectionParams } from './crossSections';
 
 export type AuditSeverity = 'error' | 'warning' | 'info';
 
@@ -21,6 +22,7 @@ export interface StructureAudit {
 export function auditStructure(nodes: Node[], beams: Beam[]): StructureAudit {
   const issues: AuditIssue[] = [];
   const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+  const nodeIds = new Set<string>();
   const connected = new Set<string>();
   const pairs = new Map<string, string>();
   const restrainedDOFs = nodes.reduce((count, node) => {
@@ -34,6 +36,19 @@ export function auditStructure(nodes: Node[], beams: Beam[]): StructureAudit {
   }
   if (beams.length === 0) {
     issues.push({ id: 'empty-beams', severity: 'error', title: 'No members yet', message: 'Connect nodes with at least one member before running FEA.' });
+  }
+
+  for (const node of nodes) {
+    if (!node.id || nodeIds.has(node.id)) {
+      issues.push({ id: `invalid-node-id-${node.id || 'unnamed'}`, severity: 'error', title: 'Invalid node ID', message: 'Node IDs must be present and unique.', nodeIds: node.id ? [node.id] : undefined });
+    }
+    nodeIds.add(node.id);
+    if (![node.x, node.y, node.fx, node.fy].every(Number.isFinite)) {
+      issues.push({ id: `invalid-node-values-${node.id}`, severity: 'error', title: 'Invalid node values', message: `${node.id || 'A node'} needs finite coordinates and load values.`, nodeIds: node.id ? [node.id] : undefined });
+    }
+    if (!['none', 'pin', 'rollerX', 'rollerY', 'fixed'].includes(node.support)) {
+      issues.push({ id: `invalid-support-${node.id}`, severity: 'error', title: 'Invalid support', message: `${node.id || 'A node'} has an unsupported boundary condition.`, nodeIds: node.id ? [node.id] : undefined });
+    }
   }
 
   const invalidBeams: string[] = [];
@@ -56,6 +71,20 @@ export function auditStructure(nodes: Node[], beams: Beam[]): StructureAudit {
     }
     if (!Number.isFinite(beam.area) || beam.area <= 0) {
       issues.push({ id: `invalid-area-${beam.id}`, severity: 'error', title: 'Invalid cross-section', message: `${beam.id} needs a positive finite cross-sectional area.`, beamIds: [beam.id] });
+    }
+    if (beam.I !== undefined && (!Number.isFinite(beam.I) || beam.I <= 0)) {
+      issues.push({ id: `invalid-inertia-${beam.id}`, severity: 'error', title: 'Invalid section inertia', message: `${beam.id} needs a positive finite moment of inertia for buckling screening.`, beamIds: [beam.id] });
+    }
+    if (beam.section !== undefined) {
+      if (!isValidSectionParams(beam.section)) {
+        issues.push({ id: `invalid-section-${beam.id}`, severity: 'error', title: 'Invalid section dimensions', message: `${beam.id} has invalid cross-section dimensions.`, beamIds: [beam.id] });
+      } else {
+        const props = computeSectionProps(beam.section);
+        const close = (actual: number, expected: number) => Math.abs(actual - expected) <= Math.max(Math.abs(expected) * 1e-6, 1e-9);
+        if (!close(beam.area, props.area) || (beam.I !== undefined && !close(beam.I, props.I))) {
+          issues.push({ id: `mismatched-section-${beam.id}`, severity: 'error', title: 'Section values do not match', message: `${beam.id} dimensions do not match its area or moment of inertia; reapply the section in the editor.`, beamIds: [beam.id] });
+        }
+      }
     }
   }
 

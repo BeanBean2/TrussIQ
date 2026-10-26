@@ -1,8 +1,9 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { BookOpen, MousePointer2, Play, X } from 'lucide-react';
 import { useHistory } from '../hooks/useHistory';
 import { analyzeStructure } from '../lib/aiOptimizer';
-import { computeSectionProps, solidRodFromArea, type SectionParams } from '../lib/crossSections';
+import { computeSectionProps, isValidSectionParams, solidRodFromArea, type SectionParams } from '../lib/crossSections';
 import {
   applyDynamics,
   DEFAULT_SEISMIC,
@@ -10,12 +11,12 @@ import {
   STORM_WIND,
 } from '../lib/dynamicsEngine';
 import { solveTruss } from '../lib/feaEngine';
+import { playUiSound } from '../lib/uiFeedback';
 import { buildFormulaBreakdown } from '../lib/formulaInspector';
 import { nextId } from '../lib/ids';
 import { computeMassCost } from '../lib/massCost';
 import { DEFAULT_AREA, DEFAULT_MATERIAL_ID } from '../lib/materials';
 import { PRESET_LOADERS, type PresetKey } from '../lib/presets';
-import { captureCanvasPNG, generateOfficialReport } from '../lib/reportGenerator';
 import {
   exportTrussFile,
   loadLocalDraft,
@@ -24,6 +25,7 @@ import {
   serializeTruss,
 } from '../lib/trussIO';
 import { auditStructure } from '../lib/structureAudit';
+import { readStoredValue, writeStoredValue } from '../lib/storage';
 import type {
   Beam,
   DynamicsMode,
@@ -53,6 +55,17 @@ import { Toolbar } from './Toolbar';
 import { TopBar } from './TopBar';
 import { TutorialOverlay } from './TutorialOverlay';
 import { UnstableModal } from './UnstableModal';
+import { TemplateLibrary } from './TemplateLibrary';
+import { ChallengeLibrary } from './ChallengeLibrary';
+import type { EngineeringChallenge } from '../lib/challenges';
+import { LoadCaseStudy } from './LoadCaseStudy';
+import { MaterialStudy } from './MaterialStudy';
+import { GeometryTools } from './GeometryTools';
+import { ARPreviewBoundary } from './ARPreviewBoundary';
+import { ChallengeMode } from './ChallengeMode';
+import { DemoHelper } from './DemoHelper';
+import { ResizeDivider } from './ResizeDivider';
+import { HIGH_WIND_PROFILE, type BridgeChallengeId } from '../lib/bridgeChallenges';
 
 const ARViewer = lazy(() =>
   import('./ARViewer').then((m) => ({ default: m.ARViewer })),
@@ -73,7 +86,7 @@ const EMPTY: StructureState = {
   defaultArea: DEFAULT_AREA,
 };
 
-export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: boolean; onOpenHome?: () => void }) {
+export function Dashboard({ initialDemo = false, initialSharedState = null, onOpenHome }: { initialDemo?: boolean; initialSharedState?: StructureState | null; onOpenHome?: () => void }) {
   const { state, commit, replace, undo, redo, canUndo, canRedo } = useHistory(EMPTY);
   const { nodes, beams, materialId, defaultArea } = state;
   const audit = useMemo(() => auditStructure(nodes, beams), [nodes, beams]);
@@ -106,11 +119,34 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showBrief, setShowBrief] = useState(false);
   const [showImpact, setShowImpact] = useState(false);
+  const [showTemplateLibrary, setShowTemplateLibrary] = useState(false);
+  const [showChallengeLibrary, setShowChallengeLibrary] = useState(false);
+  const [showLoadCaseStudy, setShowLoadCaseStudy] = useState(false);
+  const [showMaterialStudy, setShowMaterialStudy] = useState(false);
+  const [showGeometryTools, setShowGeometryTools] = useState(false);
+  const [activeChallenge, setActiveChallenge] = useState<EngineeringChallenge | null>(null);
+  const [activeBridgeChallengeId, setActiveBridgeChallengeId] = useState<BridgeChallengeId | null>(null);
   const [draftStatus, setDraftStatus] = useState('Preparing workspace');
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [soundsEnabled, setSoundsEnabled] = useState(() => readStoredValue('trussiq-ui-sounds') !== '0');
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const key = window.matchMedia('(max-width: 767px)').matches ? 'trussiq-inspector-height' : 'trussiq-inspector-width';
+    const stored = Number(readStoredValue(key));
+    const min = key.endsWith('height') ? 200 : 280;
+    const max = key.endsWith('height') ? window.innerHeight - 120 : 520;
+    return Number.isFinite(stored) && stored >= min && stored <= max ? stored : key.endsWith('height') ? Math.min(360, max) : 352;
+  });
+  const [toolbarWidth, setToolbarWidth] = useState(() => {
+    const stored = Number(readStoredValue('trussiq-toolbar-width'));
+    return Number.isFinite(stored) && stored >= 56 && stored <= 112 ? stored : 56;
+  });
+  const [uiScale, setUiScale] = useState(() => {
+    const stored = Number(readStoredValue('trussiq-ui-scale'));
+    return stored >= 0.75 && stored <= 1.5 ? stored : 1;
+  });
   const [showGuide, setShowGuide] = useState(
-    () => localStorage.getItem('trussiq-guide-dismissed') !== '1',
+    () => readStoredValue('trussiq-guide-dismissed') !== '1',
   );
 
   const [dynamicsMode, setDynamicsMode] = useState<DynamicsMode>('none');
@@ -118,12 +154,15 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
   const [seismic, setSeismic] = useState<SeismicParams>(DEFAULT_SEISMIC);
 
   const [theme, setTheme] = useState<ThemeMode>(() => {
-    const saved = localStorage.getItem('trussiq-theme');
+    const saved = readStoredValue('trussiq-theme');
     return saved === 'light' ? 'light' : 'dark';
   });
 
   const canvasEl = useRef<HTMLCanvasElement | null>(null);
+  const toastTimeoutRef = useRef<number | null>(null);
   const bootstrapped = useRef(false);
+  const skipInitialAutosave = useRef(false);
+  const sharedReviewSession = useRef(false);
 
   /** Nodes with environmental loads applied (for solver + display arrows). */
   const dynamicNodes = useMemo(
@@ -142,23 +181,56 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
     setHighlightNodeIds([]);
   }, []);
 
+  const showToast = useCallback((message: string) => {
+    setCopyStatus(message);
+    if (toastTimeoutRef.current !== null) window.clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = window.setTimeout(() => {
+      setCopyStatus(null);
+      toastTimeoutRef.current = null;
+    }, 2400);
+  }, []);
+
+  useEffect(() => () => {
+    if (toastTimeoutRef.current !== null) window.clearTimeout(toastTimeoutRef.current);
+  }, []);
+
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('trussiq-theme', theme);
+    writeStoredValue('trussiq-theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const previousFontSize = root.style.fontSize;
+    root.style.fontSize = `${uiScale * 100}%`;
+    return () => {
+      root.style.fontSize = previousFontSize;
+    };
+  }, [uiScale]);
 
   useEffect(() => {
     if (bootstrapped.current) return;
     bootstrapped.current = true;
+    skipInitialAutosave.current = true;
+    sharedReviewSession.current = Boolean(initialSharedState);
     const draft = loadLocalDraft();
     replace(draft ?? PRESET_LOADERS.howe.create());
-    setDraftStatus(draft ? 'Restored local draft' : 'Ready to edit');
-  }, [replace]);
+    if (initialSharedState) replace(initialSharedState);
+    setDraftStatus(initialSharedState ? 'Shared model opened · Undo restores your previous design' : draft ? 'Restored local draft' : 'Ready to edit');
+  }, [initialSharedState, replace]);
 
   useEffect(() => {
     if (!bootstrapped.current) return;
-    saveLocalDraft(state);
-    setDraftStatus('Saved locally');
+    if (skipInitialAutosave.current) {
+      skipInitialAutosave.current = false;
+      return;
+    }
+    if (sharedReviewSession.current) {
+      setDraftStatus('Shared review · local draft preserved · Save Draft to keep changes');
+      return;
+    }
+    const saved = saveLocalDraft(state);
+    setDraftStatus(saved ? 'Saved locally' : 'Autosave unavailable — export a backup');
   }, [state]);
 
   useEffect(() => {
@@ -205,6 +277,11 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
   }, [dynamicsMode, nodes, beams, wind, seismic.amplitude, seismic.omega]);
 
   const runSolver = useCallback(() => {
+    if (audit.errors > 0) {
+      const first = audit.issues.find((issue) => issue.severity === 'error');
+      setUnstableMsg(`Fix the model audit errors before running FEA. ${first?.title ?? ''} ${first?.message ?? ''}`.trim());
+      return;
+    }
     if (nodes.length < 2 || beams.length < 1) {
       setUnstableMsg(
         'Add at least two nodes and one beam before running the FEA solver.',
@@ -217,7 +294,15 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
       const res = solveTruss(loaded, beams);
       setResult(res);
       setSolving(false);
-      if (res.unstable) {
+      if (res.success) {
+        playUiSound('solve', soundsEnabled);
+        if (res.passed) {
+          playUiSound('pass', soundsEnabled);
+          showToast('Analysis solved; modeled members are below yield.');
+        } else {
+          showToast('Analysis solved; one or more members exceed modeled yield.');
+        }
+      } else if (res.unstable) {
         setUnstableMsg(
           res.message ??
             'Unstable Structure: Add more supports to prevent rigid body motion.',
@@ -226,7 +311,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
         setUnstableMsg(res.message);
       }
     });
-  }, [nodes, beams, dynamicsMode, wind, seismic]);
+  }, [nodes, beams, dynamicsMode, wind, seismic, audit, soundsEnabled, showToast]);
 
   // Re-solve when wind mode toggled on
   useEffect(() => {
@@ -237,12 +322,10 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLSelectElement ||
-        e.target instanceof HTMLTextAreaElement
-      )
-        return;
+      const target = e.target instanceof HTMLElement ? e.target : null;
+      if (target && (target.isContentEditable || target.closest('input, select, textarea, [role="textbox"], [contenteditable="true"]'))) return;
+      const modifierShortcut = e.ctrlKey || e.metaKey;
+      if (target?.closest('button, a') && !(modifierShortcut && ['z', 'y', 's', 'enter'].includes(e.key.toLowerCase()))) return;
 
       if (e.key === '?' || (e.shiftKey && e.key === '/')) {
         e.preventDefault();
@@ -252,14 +335,14 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
 
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        saveLocalDraft(state);
-        setDraftStatus('Saved locally');
+        sharedReviewSession.current = false;
+        setDraftStatus(saveLocalDraft(state) ? 'Saved locally' : 'Save failed — export a backup');
         return;
       }
 
       if (showCollapse && e.key === ' ') return;
 
-      if (e.key === ' ' && !e.ctrlKey && !e.metaKey) {
+      if (e.key === ' ' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         runSolver();
         return;
@@ -281,18 +364,20 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
         return;
       }
 
-      const map: Record<string, ToolMode> = {
-        v: 'select',
-        n: 'node',
-        b: 'beam',
-        f: 'force',
-        s: 'support',
-        e: 'erase',
-      };
-      const t = map[e.key.toLowerCase()];
-      if (t) {
-        setTool(t);
-        setBeamDraftFrom(null);
+      if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        const map: Record<string, ToolMode> = {
+          v: 'select',
+          n: 'node',
+          b: 'beam',
+          f: 'force',
+          s: 'support',
+          e: 'erase',
+        };
+        const t = map[e.key.toLowerCase()];
+        if (t) {
+          setTool(t);
+          setBeamDraftFrom(null);
+        }
       }
       if (e.key === 'Escape') {
         setBeamDraftFrom(null);
@@ -387,6 +472,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
         { id: nextId('n'), x, y, support: 'none' as const, fx: 0, fy: 0 },
       ],
     }));
+    playUiSound('click', soundsEnabled);
     invalidate();
   };
 
@@ -417,6 +503,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
         materialId,
       };
       commit((prev) => ({ ...prev, beams: [...prev.beams, beam] }));
+      playUiSound('click', soundsEnabled);
       invalidate();
     }
     setBeamDraftFrom(null);
@@ -474,11 +561,12 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
   };
 
   const changeDefaultArea = (area: number) => {
+    if (!Number.isFinite(area) || area <= 0) return;
     commit((prev) => ({ ...prev, defaultArea: area }));
   };
 
   const changeSelectedBeamArea = (area: number) => {
-    if (!selectedBeamId) return;
+    if (!selectedBeamId || !Number.isFinite(area) || area <= 0) return;
     const section = solidRodFromArea(area);
     const props = computeSectionProps(section);
     commit((prev) => ({
@@ -493,7 +581,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
   };
 
   const changeSelectedBeamSection = (section: SectionParams, mid: string) => {
-    if (!selectedBeamId) return;
+    if (!selectedBeamId || !isValidSectionParams(section)) return;
     const props = computeSectionProps(section);
     commit((prev) => ({
       ...prev,
@@ -522,6 +610,9 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
         materialId: parsed.materialId,
         defaultArea: parsed.defaultArea,
       });
+      setSelectedNodeId(null);
+      setSelectedBeamId(null);
+      setBeamDraftFrom(null);
       invalidate();
     } catch (err) {
       setUnstableMsg(err instanceof Error ? err.message : 'Failed to import .truss file.');
@@ -531,28 +622,37 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
   const handleCopyTruss = async () => {
     try {
       await navigator.clipboard.writeText(serializeTruss(state));
-      setCopyStatus('Design JSON copied to clipboard');
+      showToast('Design JSON copied to clipboard.');
     } catch {
-      setCopyStatus('Clipboard access unavailable');
+      showToast('Clipboard access unavailable.');
     }
-    window.setTimeout(() => setCopyStatus(null), 2400);
   };
 
   const handleOfficialReport = async () => {
-    const massCost = computeMassCost(nodes, beams);
-    const img = captureCanvasPNG(canvasEl.current);
-    await generateOfficialReport({
-      name: 'TrussIQ Official Engineering Report',
-      state,
-      result,
-      ai,
-      massCost,
-      canvasImage: img,
-    });
+    try {
+      const massCost = computeMassCost(nodes, beams);
+      let canvasImage: string | null = null;
+      try {
+        canvasImage = canvasEl.current?.toDataURL('image/png') ?? null;
+      } catch {
+        // The report can still be generated without a canvas snapshot.
+      }
+      const { generateOfficialReport } = await import('../lib/reportGenerator');
+      await generateOfficialReport({
+        name: 'TrussIQ Structural Study Report',
+        state,
+        result,
+        ai,
+        massCost,
+        canvasImage,
+      });
+    } catch (error) {
+      setUnstableMsg(error instanceof Error ? error.message : 'Could not generate the PDF report.');
+    }
   };
 
   return (
-    <div className="flex h-[100dvh] min-h-[32rem] flex-col overflow-hidden bg-surface-950 text-surface-100">
+    <div className="workspace-root flex h-[100dvh] min-h-[24rem] flex-col overflow-hidden bg-surface-950 text-surface-100">
       {!presentationMode && <TopBar
         gridSize={gridSize}
         showDeflection={showDeflection}
@@ -574,6 +674,8 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
         onDeflectionScale={setDeflectionScale}
         onRunSolver={runSolver}
         onLoadPreset={loadPreset}
+        onOpenTemplateLibrary={() => setShowTemplateLibrary(true)}
+        onOpenGeometryTools={() => setShowGeometryTools(true)}
         onClear={clearAll}
         onExportTruss={() => exportTrussFile(state, 'TrussIQ Design')}
         onCopyTruss={handleCopyTruss}
@@ -581,8 +683,8 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
         onExportOfficialReport={handleOfficialReport}
         draftStatus={draftStatus}
         onSaveDraft={() => {
-          saveLocalDraft(state);
-          setDraftStatus('Saved locally');
+          sharedReviewSession.current = false;
+          setDraftStatus(saveLocalDraft(state) ? 'Saved locally' : 'Save failed — export a backup');
         }}
         onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
         onUndo={() => {
@@ -599,6 +701,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
           if (m === 'none') setShowDeflection(false);
           if (m === 'seismic') setSeismic((s) => ({ ...s, time: 0 }));
         }}
+        onOpenLoadCaseStudy={() => setShowLoadCaseStudy(true)}
         onWindProfile={(profile) => {
           setWind(profile === 'storm' ? STORM_WIND : DEFAULT_WIND);
           setDynamicsMode('wind');
@@ -617,9 +720,20 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
         onOpenHome={onOpenHome ?? (() => undefined)}
         sidebarOpen={sidebarOpen}
         onToggleSidebar={() => setSidebarOpen((open) => !open)}
+        uiScale={uiScale}
+        onUiScale={(scale) => {
+          setUiScale(scale);
+          writeStoredValue('trussiq-ui-scale', String(scale));
+        }}
         nodeCount={nodes.length}
         beamCount={beams.length}
         analysisLabel={result?.success ? 'Analyzed' : result ? 'Needs review' : 'Ready'}
+        soundsEnabled={soundsEnabled}
+        onToggleSounds={() => setSoundsEnabled((enabled) => {
+          const next = !enabled;
+          writeStoredValue('trussiq-ui-sounds', next ? '1' : '0');
+          return next;
+        })}
       />}
 
       {dynamicsMode !== 'none' && (
@@ -641,21 +755,26 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
       )}
 
       {copyStatus && (
-        <div className="pointer-events-none fixed bottom-5 left-1/2 z-40 -translate-x-1/2 rounded-lg border border-accent/40 bg-surface-900 px-3 py-2 text-xs font-medium text-accent shadow-xl animate-fade-in">
+        <div role="status" aria-live="polite" className="pointer-events-none fixed bottom-5 left-1/2 z-[95] -translate-x-1/2 rounded-lg border border-accent/40 bg-surface-900 px-3 py-2 text-xs font-medium text-accent shadow-xl animate-fade-in">
           {copyStatus}
         </div>
       )}
 
-      <div className="relative flex min-h-0 flex-1">
-        {!presentationMode && <Toolbar
+      <div className="workspace-panels relative flex min-h-0 flex-1" style={{ '--inspector-height': `${sidebarWidth}px` } as CSSProperties}>
+        {!presentationMode && <div className="toolbar-panel" style={{ '--toolbar-width': `${toolbarWidth}px` } as CSSProperties}><Toolbar
           tool={tool}
           onToolChange={(t) => {
             setTool(t);
             setBeamDraftFrom(null);
           }}
-        />}
+        /></div>}
+        {!presentationMode && <ResizeDivider label="Resize drawing tools" orientation="vertical" onResize={(delta) => setToolbarWidth((width) => {
+          const next = Math.max(56, Math.min(112, width + delta));
+          writeStoredValue('trussiq-toolbar-width', String(next));
+          return next;
+        })} />}
 
-        <main className="relative min-w-0 flex-1">
+        <main className="relative min-h-0 min-w-0 flex-1">
           <CanvasEditor
             nodes={dynamicNodes}
             beams={beams}
@@ -702,6 +821,13 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
               onExit={() => setPresentationMode(false)}
             />
           )}
+          {activeChallenge && !presentationMode && (
+            <section className="absolute right-4 top-4 z-10 w-[min(20rem,calc(100%-2rem))] rounded-xl border border-accent/35 bg-surface-900/95 p-3 shadow-xl backdrop-blur-sm">
+              <div className="flex items-start justify-between gap-3"><div><p className="text-[9px] font-semibold uppercase tracking-wider text-accent">Active investigation · {activeChallenge.id.slice(-3)}</p><h3 className="mt-1 text-xs font-semibold text-surface-100">{activeChallenge.title}</h3></div><button type="button" onClick={() => setActiveChallenge(null)} aria-label="Dismiss active investigation" className="text-surface-500 hover:text-surface-200"><X size={13} /></button></div>
+              <p className="mt-2 text-[10px] leading-4 text-surface-300">{activeChallenge.brief}</p>
+              <p className="mt-2 border-t border-surface-700 pt-2 text-[10px] leading-4 text-surface-400">Evidence: {activeChallenge.target}</p>
+            </section>
+          )}
           {showGuide && nodes.length > 0 && !result && (
             <section className="absolute left-4 top-4 w-[min(23rem,calc(100%-2rem))] rounded-xl border border-accent/30 bg-surface-900/95 p-4 shadow-2xl shadow-black/20 backdrop-blur-sm animate-fade-in">
               <div className="flex items-start justify-between gap-3">
@@ -719,7 +845,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
                   aria-label="Dismiss workspace guide"
                   onClick={() => {
                     setShowGuide(false);
-                    localStorage.setItem('trussiq-guide-dismissed', '1');
+                    writeStoredValue('trussiq-guide-dismissed', '1');
                   }}
                   className="rounded-md p-1 text-surface-500 hover:bg-surface-800 hover:text-surface-200"
                 >
@@ -760,16 +886,26 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
           )}
         </main>
 
-        {!presentationMode && sidebarOpen && <Sidebar
+        {!presentationMode && sidebarOpen && <ResizeDivider label="Resize inspector" orientation="auto" onResize={(delta) => setSidebarWidth((width) => {
+          const phone = window.matchMedia('(max-width: 767px)').matches;
+          const next = phone
+            ? Math.max(200, Math.min(window.innerHeight - 120, width - delta))
+            : Math.max(280, Math.min(Math.min(520, window.innerWidth - 40), width - delta));
+          writeStoredValue(phone ? 'trussiq-inspector-height' : 'trussiq-inspector-width', String(next));
+          return next;
+        })} />}
+        {!presentationMode && sidebarOpen && <div className="inspector-panel" style={{ '--inspector-width': `${sidebarWidth}px`, '--inspector-height': `${sidebarWidth}px` } as CSSProperties}><Sidebar
           materialId={materialId}
           defaultArea={defaultArea}
           result={result}
           ai={ai}
           nodes={nodes}
+          analysisNodes={dynamicNodes}
           beams={beams}
           selectedBeamId={selectedBeamId}
           selectedNodeId={selectedNodeId}
           onMaterialChange={changeMaterial}
+          onCompareMaterials={() => setShowMaterialStudy(true)}
           onAreaChange={changeDefaultArea}
           onSelectedBeamArea={changeSelectedBeamArea}
           onSelectedBeamSection={changeSelectedBeamSection}
@@ -794,7 +930,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
           }}
           onRunSolver={runSolver}
           audit={audit}
-        />}
+        /></div>}
       </div>
 
       {forceTarget && (
@@ -832,9 +968,28 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
             loadPreset('warren');
             setShowMission(true);
           }}
+          onBrowseChallenges={() => {
+            setShowMission(false);
+            setShowChallengeLibrary(true);
+          }}
           onClose={() => setShowMission(false)}
         />
       )}
+      {showChallengeLibrary && (
+        <ChallengeLibrary
+          onClose={() => setShowChallengeLibrary(false)}
+          onStart={(challenge) => {
+            loadPreset(challenge.preset);
+            setDynamicsMode(challenge.dynamics);
+            if (challenge.dynamics === 'seismic') setSeismic((current) => ({ ...current, time: 0 }));
+            setActiveChallenge(challenge);
+            setShowChallengeLibrary(false);
+          }}
+        />
+      )}
+      {showLoadCaseStudy && <LoadCaseStudy nodes={nodes} beams={beams} onClose={() => setShowLoadCaseStudy(false)} />}
+      {showMaterialStudy && <MaterialStudy nodes={dynamicNodes} beams={beams} currentMaterialId={materialId} onApply={changeMaterial} onClose={() => setShowMaterialStudy(false)} />}
+      {showGeometryTools && <GeometryTools state={state} onApply={(next) => { commit(next); invalidate(); }} onClose={() => setShowGeometryTools(false)} />}
       {showCollaboration && (
         <CollaborationCenter
           state={state}
@@ -882,7 +1037,7 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
             link.href = url;
             link.download = `${brief.title.replace(/[^\w-]+/g, '_') || 'trussiq-brief'}.json`;
             link.click();
-            URL.revokeObjectURL(url);
+            window.setTimeout(() => URL.revokeObjectURL(url), 1000);
           }}
         />
       )}
@@ -896,6 +1051,50 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
           onClose={() => setShowImpact(false)}
         />
       )}
+      <ChallengeMode
+        nodes={nodes}
+        beams={beams}
+        activeChallengeId={activeBridgeChallengeId}
+        onStart={(id, starter) => {
+          replace(starter);
+          invalidate();
+          setActiveBridgeChallengeId(id);
+          if (id === 'high-wind-resilience') {
+            setWind(HIGH_WIND_PROFILE);
+            setDynamicsMode('wind');
+          } else {
+            setDynamicsMode('none');
+          }
+        }}
+      />
+      <DemoHelper
+        onLoadWarren={() => {
+          if ((nodes.length > 0 || beams.length > 0) && !window.confirm('Load the Warren truss for the demo? This replaces the current design.')) return false;
+          loadPreset('warren');
+          return true;
+        }}
+        onRunSolver={runSolver}
+        onToggleDeflection={() => {
+          if (!result?.success) {
+            runSolver();
+            setShowDeflection(true);
+          } else {
+            setShowDeflection((visible) => !visible);
+          }
+        }}
+      />
+      {showTemplateLibrary && (
+        <TemplateLibrary
+          state={state}
+          onLoad={(snapshot) => {
+            replace(snapshot);
+            invalidate();
+            setSelectedNodeId(null);
+            setSelectedBeamId(null);
+          }}
+          onClose={() => setShowTemplateLibrary(false)}
+        />
+      )}
       <Suspense fallback={null}>
         {showCollapse && (
           <CollapseAnimator
@@ -905,7 +1104,9 @@ export function Dashboard({ initialDemo = false, onOpenHome }: { initialDemo?: b
           />
         )}
         {showAR && (
-          <ARViewer nodes={nodes} beams={beams} onClose={() => setShowAR(false)} />
+          <ARPreviewBoundary onClose={() => setShowAR(false)}>
+            <ARViewer nodes={nodes} beams={beams} onClose={() => setShowAR(false)} />
+          </ARPreviewBoundary>
         )}
         {showCompare && (
           <CompareMode current={state} onClose={() => setShowCompare(false)} />
@@ -941,11 +1142,12 @@ function PresentationHud({
           <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-surface-400">TrussIQ presentation</span>
         </div>
         <h2 className="mt-1 text-lg font-semibold tracking-tight text-surface-100">
-          {result?.success ? (result.passed ? 'Structure passes the current load case' : 'Structure needs a design revision') : 'Run FEA to reveal the load path'}
+          {result?.success ? (result.passed ? 'Below the modeled yield limit' : 'Modeled yield limit exceeded') : 'Run FEA to reveal the load path'}
         </h2>
         <p className="mt-1 text-xs text-surface-400">
           {nodeCount} nodes · {beamCount} members · Direct Stiffness Method
         </p>
+        <p className="mt-1 text-[10px] leading-4 text-surface-500">Linear, axial-only yield check for learning; not a structural safety certification.</p>
       </div>
 
       <div className="pointer-events-auto flex flex-col items-end gap-2">
@@ -957,9 +1159,9 @@ function PresentationHud({
           <X size={13} /> Exit presentation
         </button>
         <div className="grid grid-cols-3 gap-2">
-          <PresentationMetric label="Safety factor" value={Number.isFinite(safetyFactor) ? `${safetyFactor.toFixed(2)}×` : '∞'} />
+          <PresentationMetric label="Yield safety factor" value={Number.isFinite(safetyFactor) ? `${safetyFactor.toFixed(2)}×` : '∞'} />
           <PresentationMetric label="Max deflection" value={result?.success ? `${maxDeflection.toFixed(3)} mm` : '—'} />
-          <PresentationMetric label="Peak stress" value={result?.success ? `${(result.maxSafetyRatio * 100).toFixed(0)}%` : '—'} />
+          <PresentationMetric label="Peak yield use" value={result?.success ? `${(result.maxSafetyRatio * 100).toFixed(0)}%` : '—'} />
         </div>
       </div>
     </section>

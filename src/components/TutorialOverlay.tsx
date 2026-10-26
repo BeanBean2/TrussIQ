@@ -1,5 +1,6 @@
 import { BookOpen, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useState } from 'react';
+import { useAccessibleDialog } from '../hooks/useAccessibleDialog';
 
 interface TutorialOverlayProps {
   onClose: () => void;
@@ -54,7 +55,7 @@ const STEPS: Step[] = [
   },
   {
     title: 'Read the Heatmap',
-    body: 'Green = low stress, yellow/orange = approaching yield, red = failed. Blue dashed members are in compression (watch buckling!). Toggle Deflection to exaggerate shape change.',
+    body: 'Green = low modeled yield use, yellow/orange = approaching yield, red = yield exceeded. Blue dashed members are in compression; the coach provides a separate approximate buckling screen. Toggle Deflection to exaggerate shape change.',
   },
   {
     title: 'Formula Inspector',
@@ -67,6 +68,7 @@ const STEPS: Step[] = [
 ];
 
 export function TutorialOverlay({ onClose, onLoadWarren, onSetTool }: TutorialOverlayProps) {
+  const dialogRef = useAccessibleDialog(onClose);
   const [step, setStep] = useState(0);
   const current = STEPS[step];
   const progress = ((step + 1) / STEPS.length) * 100;
@@ -83,7 +85,7 @@ export function TutorialOverlay({ onClose, onLoadWarren, onSetTool }: TutorialOv
 
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/45 p-4 backdrop-blur-[2px] sm:items-center animate-fade-in">
-      <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-surface-700 bg-surface-900 shadow-2xl">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="TrussIQ guided tutorial" className="w-full max-w-lg overflow-hidden rounded-2xl border border-surface-700 bg-surface-900 shadow-2xl">
         <div className="h-1 bg-surface-800">
           <div className="h-full bg-accent transition-all duration-300" style={{ width: `${progress}%` }} />
         </div>

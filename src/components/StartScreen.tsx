@@ -26,12 +26,12 @@ const FEATURES = [
   {
     icon: BarChart3,
     title: 'Understand forces',
-    text: 'Run finite element analysis and see stress, deflection, and safety factors.',
+    text: 'Run finite element analysis and inspect stress, deflection, and yield safety factors.',
   },
   {
     icon: Sparkles,
     title: 'Learn by exploring',
-    text: 'Compare truss patterns, inspect formulas, and test collapse behavior safely.',
+    text: 'Compare truss patterns, inspect formulas, and explore a simplified yield-collapse model.',
   },
 ];
 
@@ -156,9 +156,9 @@ export function StartScreen({
                 </svg>
                 <div className="absolute bottom-4 left-4 rounded-lg border border-pass/30 bg-surface-900/90 px-3 py-2 text-[10px] shadow-lg">
                   <div className="flex items-center gap-1.5 font-semibold text-pass">
-                    <CheckCircle2 size={12} /> ANALYSIS PASSED
+                    <CheckCircle2 size={12} /> YIELD CHECK PASSED
                   </div>
-                  <div className="mt-1 font-mono text-surface-400">Safety factor 2.84</div>
+                  <div className="mt-1 font-mono text-surface-400">Yield safety factor 2.84</div>
                 </div>
               </div>
               <div className="flex items-center justify-between border-t border-surface-700 px-4 py-3 text-[10px] text-surface-400">

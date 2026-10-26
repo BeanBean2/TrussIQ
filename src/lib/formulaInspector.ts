@@ -76,10 +76,8 @@ export function buildFormulaBreakdown(
   const stress = axialForce / beam.area;
   const strain = L > 0 ? deltaL / L : 0;
 
-  let status: FormulaBreakdown['status'] = 'zero';
-  if (Math.abs(stress) < 1e-6) status = 'zero';
-  else if (stress > 0) status = 'tension';
-  else status = 'compression';
+  const solvedMember = result?.success ? result.members.find((member) => member.beamId === beamId) : undefined;
+  const status: FormulaBreakdown['status'] = solvedMember?.status ?? (axialForce > 0 ? 'tension' : axialForce < 0 ? 'compression' : 'zero');
 
   return {
     beamId: beam.id,

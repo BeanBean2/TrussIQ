@@ -1,4 +1,7 @@
 import type { StructureDocument, StructureState, SupportType } from './types';
+import { MATERIALS } from './materials';
+import { computeSectionProps, isValidSectionParams } from './crossSections';
+import { readStoredValue, removeStoredValue, writeStoredValue } from './storage';
 
 const FORMAT = 'trussiq.truss' as const;
 const DRAFT_KEY = 'trussiq-local-draft';
@@ -24,7 +27,7 @@ export function exportTrussFile(state: StructureState, name = 'design'): void {
   a.href = url;
   a.download = `${sanitize(name)}.truss`;
   a.click();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /** Parse a `.truss` / JSON file into a StructureState. Throws on invalid data. */
@@ -42,6 +45,7 @@ export function parseTrussFile(text: string): StructureState & { name: string } 
       !node ||
       typeof node !== 'object' ||
       typeof node.id !== 'string' ||
+      node.id.trim().length === 0 ||
       nodeIds.has(node.id) ||
       !Number.isFinite(node.x) ||
       !Number.isFinite(node.y) ||
@@ -53,39 +57,68 @@ export function parseTrussFile(text: string): StructureState & { name: string } 
     }
     nodeIds.add(node.id);
   }
+  const nodeMap = new Map(raw.nodes.map((node) => [node.id, node]));
 
   const beamIds = new Set<string>();
   for (const beam of raw.beams) {
+    const start = beam && typeof beam.nodeI === 'string' ? nodeMap.get(beam.nodeI) : undefined;
+    const end = beam && typeof beam.nodeJ === 'string' ? nodeMap.get(beam.nodeJ) : undefined;
     if (
       !beam ||
       typeof beam !== 'object' ||
       typeof beam.id !== 'string' ||
+      beam.id.trim().length === 0 ||
       beamIds.has(beam.id) ||
       typeof beam.nodeI !== 'string' ||
       typeof beam.nodeJ !== 'string' ||
       beam.nodeI === beam.nodeJ ||
-      !nodeIds.has(beam.nodeI) ||
-      !nodeIds.has(beam.nodeJ) ||
+      !start ||
+      !end ||
       !Number.isFinite(beam.area) ||
       beam.area <= 0 ||
       typeof beam.materialId !== 'string' ||
+      !MATERIALS.some((material) => material.id === beam.materialId) ||
       (beam.I !== undefined && (!Number.isFinite(beam.I) || beam.I <= 0))
     ) {
       throw new Error('Each beam needs a unique id, two valid nodes, material, and positive area.');
     }
+    if (Math.hypot(end.x - start.x, end.y - start.y) < 1e-9) {
+      throw new Error(`Member ${beam.id} has zero length.`);
+    }
+    if (beam.section !== undefined) {
+      if (!isValidSectionParams(beam.section)) throw new Error(`Member ${beam.id} has invalid cross-section dimensions.`);
+      const properties = computeSectionProps(beam.section);
+      const close = (actual: number, expected: number) => Math.abs(actual - expected) <= Math.max(Math.abs(expected) * 1e-6, 1e-9);
+      if (!close(beam.area, properties.area) || (beam.I !== undefined && !close(beam.I, properties.I))) {
+        throw new Error(`Member ${beam.id} section dimensions do not match its area or moment of inertia.`);
+      }
+    }
     beamIds.add(beam.id);
+  }
+
+  if (typeof raw.materialId !== 'undefined' &&
+      (typeof raw.materialId !== 'string' || !MATERIALS.some((material) => material.id === raw.materialId))) {
+    throw new Error('The design has an unknown default material.');
+  }
+  if (typeof raw.defaultArea !== 'undefined' &&
+      (typeof raw.defaultArea !== 'number' || !Number.isFinite(raw.defaultArea) || raw.defaultArea <= 0)) {
+    throw new Error('The default member area must be a positive finite number.');
   }
 
   return {
     name: typeof raw.name === 'string' ? raw.name : 'Imported Design',
     nodes: raw.nodes as StructureState['nodes'],
-    beams: raw.beams as StructureState['beams'],
+    beams: (raw.beams as StructureState['beams']).map((beam) =>
+      beam.section && beam.I === undefined
+        ? { ...beam, I: computeSectionProps(beam.section).I }
+        : beam,
+    ),
     materialId: typeof raw.materialId === 'string' ? raw.materialId : 'steel',
     defaultArea: typeof raw.defaultArea === 'number' ? raw.defaultArea : 100,
   };
 }
 
-export function saveLocalDraft(state: StructureState): void {
+export function saveLocalDraft(state: StructureState): boolean {
   const doc: StructureDocument = {
     version: 1,
     format: FORMAT,
@@ -93,11 +126,11 @@ export function saveLocalDraft(state: StructureState): void {
     exportedAt: new Date().toISOString(),
     ...state,
   };
-  localStorage.setItem(DRAFT_KEY, JSON.stringify(doc));
+  return writeStoredValue(DRAFT_KEY, JSON.stringify(doc));
 }
 
 export function loadLocalDraft(): StructureState | null {
-  const text = localStorage.getItem(DRAFT_KEY);
+  const text = readStoredValue(DRAFT_KEY);
   if (!text) return null;
 
   try {
@@ -109,11 +142,11 @@ export function loadLocalDraft(): StructureState | null {
       defaultArea: parsed.defaultArea,
     };
   } catch {
-    localStorage.removeItem(DRAFT_KEY);
+    removeStoredValue(DRAFT_KEY);
     return null;
   }
 }
 
 function sanitize(name: string): string {
-  return name.replace(/[^\w\-]+/g, '_').slice(0, 64) || 'trussiq';
+  return name.replace(/[^\w-]+/g, '_').slice(0, 64) || 'trussiq';
 }

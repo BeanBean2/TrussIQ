@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useAccessibleDialog } from '../hooks/useAccessibleDialog';
 import type { PresetKey } from '../lib/presets';
 
 interface CommandPaletteProps {
@@ -65,6 +66,7 @@ export function CommandPalette({
   onOpenBrief,
   onOpenImpact,
 }: CommandPaletteProps) {
+  const dialogRef = useAccessibleDialog(onClose);
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -95,10 +97,6 @@ export function CommandPalette({
   const filtered = commands.filter((command) => `${command.label} ${command.description} ${command.group}`.toLowerCase().includes(query.toLowerCase()));
 
   useEffect(() => {
-    setActiveIndex(0);
-  }, [query]);
-
-  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'ArrowDown') {
         event.preventDefault();
@@ -110,9 +108,6 @@ export function CommandPalette({
         event.preventDefault();
         filtered[activeIndex]?.run();
         if (filtered[activeIndex]) onClose();
-      } else if (event.key === 'Escape') {
-        event.preventDefault();
-        onClose();
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -121,10 +116,10 @@ export function CommandPalette({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-start justify-center bg-black/60 p-4 pt-[12vh] backdrop-blur-sm animate-fade-in" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
-      <section role="dialog" aria-modal="true" aria-label="Command palette" className="w-full max-w-xl overflow-hidden rounded-2xl border border-surface-600/80 bg-surface-900/95 shadow-2xl shadow-black/40 backdrop-blur-xl">
+      <section ref={dialogRef} role="dialog" aria-modal="true" aria-label="Command palette" className="w-full max-w-xl overflow-hidden rounded-2xl border border-surface-600/80 bg-surface-900/95 shadow-2xl shadow-black/40 backdrop-blur-xl">
         <div className="flex items-center gap-3 border-b border-surface-700 px-4">
           <Search size={18} className="text-accent" />
-          <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search actions, tools, and workflows…" className="h-14 min-w-0 flex-1 bg-transparent text-sm text-surface-100 outline-none placeholder:text-surface-500" />
+          <input autoFocus value={query} onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); }} placeholder="Search actions, tools, and workflows…" className="h-14 min-w-0 flex-1 bg-transparent text-sm text-surface-100 outline-none placeholder:text-surface-500" />
           <kbd className="hidden rounded border border-surface-700 px-1.5 py-1 font-mono text-[10px] text-surface-500 sm:block">ESC</kbd>
         </div>
         <div className="max-h-[min(28rem,65vh)] overflow-y-auto p-2">

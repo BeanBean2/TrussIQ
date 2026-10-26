@@ -9,6 +9,7 @@
  */
 
 import { getMaterial } from './materials';
+import { computeSectionProps } from './crossSections';
 import type {
   AIAdviceItem,
   AIAnalysis,
@@ -17,7 +18,6 @@ import type {
   Node,
 } from './types';
 
-const ZERO_FORCE_EPS = 1e-3; // N
 /** Effective-length factor K for pin-ended truss bars (Euler). */
 const K_EFF = 1.0;
 /** Flag buckling when |σ_comp| exceeds this fraction of σ_cr. */
@@ -75,7 +75,7 @@ export function analyzeStructure(
       severity: 'info',
       title: 'Run the solver first',
       message:
-        'Click “Run FEA Solver” so the AI assistant can inspect stresses, buckling risk, and zero-force members.',
+        'Click “Run FEA Solver” so the local rule-based coach can inspect stress, screen for buckling risk, and identify zero-force members.',
     });
     return { items, bucklingBeamIds, zeroForceBeamIds, hotNodeIds };
   }
@@ -89,7 +89,8 @@ export function analyzeStructure(
     const beam = beamMap.get(m.beamId);
     if (!beam) continue;
     const mat = getMaterial(beam.materialId);
-    const sigmaCr = eulerCriticalStress(mat.E, beam.area, m.length, beam.I);
+    const sectionI = beam.I ?? (beam.section ? computeSectionProps(beam.section).I : undefined);
+    const sigmaCr = eulerCriticalStress(mat.E, beam.area, m.length, sectionI);
     const sigmaComp = Math.abs(m.stress);
 
     if (sigmaComp >= BUCKLING_MARGIN * sigmaCr || sigmaCr < mat.sigmaYield * 0.15) {
@@ -111,7 +112,7 @@ export function analyzeStructure(
 
   // --- 2. Zero-force members (weight savings) ---
   for (const m of result.members) {
-    if (Math.abs(m.axialForce) < ZERO_FORCE_EPS || m.status === 'zero') {
+    if (m.status === 'zero') {
       zeroForceBeamIds.push(m.beamId);
     }
   }
@@ -166,7 +167,7 @@ export function analyzeStructure(
       (r) =>
         r.nodeId !== hottest.nodeId &&
         !neighbors.has(r.nodeId) &&
-        (nodeMap.get(r.nodeId)?.support === 'none' || true),
+        nodeMap.get(r.nodeId)?.support === 'none',
     );
 
     let braceTip = 'Consider adding diagonal bracing to redistribute axial stress.';
@@ -207,11 +208,12 @@ export function analyzeStructure(
     items.push({
       id: 'sound',
       severity: 'success',
-      title: 'Structure looks healthy',
+      title: 'Modeled yield check passed',
       message:
         `Peak |σ|/σ_yield = ${(result.maxSafetyRatio * 100).toFixed(0)}%. ` +
-        `No yield failures under the current load case` +
-        (bucklingBeamIds.length ? ', but review buckling warnings above.' : '.'),
+        `No members exceed yield under this linear axial load case. This does not establish overall structural safety; ` +
+        (bucklingBeamIds.length ? 'review the separate buckling screening flags above. ' : 'compression buckling is not cleared by this check. ') +
+        'Connections, bracing, fatigue, and code requirements are not verified.',
     });
   }
 

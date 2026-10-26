@@ -1,5 +1,7 @@
 import { ClipboardList, Download, Save, X } from 'lucide-react';
 import { useState } from 'react';
+import { useAccessibleDialog } from '../hooks/useAccessibleDialog';
+import { readStoredValue, writeStoredValue } from '../lib/storage';
 
 interface ProjectBriefProps {
   onClose: () => void;
@@ -24,8 +26,8 @@ const DEFAULT_BRIEF: ProjectBriefData = {
   title: 'Bridge design study',
   author: '',
   course: '',
-  objective: 'Design a safe, efficient truss and explain how forces move through it.',
-  constraints: 'Keep the structure stable, safe, and efficient.',
+  objective: 'Design an efficient truss and explain its load path and analysis limits.',
+  constraints: 'Compare the modeled yield limit, stability, mass, and cost; identify effects the model does not verify.',
   audience: 'Classroom review',
   status: 'draft',
   tags: 'FEA, truss, structural engineering',
@@ -34,23 +36,26 @@ const DEFAULT_BRIEF: ProjectBriefData = {
 };
 
 export function ProjectBrief({ onClose, onExport }: ProjectBriefProps) {
+  const dialogRef = useAccessibleDialog(onClose);
   const [brief, setBrief] = useState<ProjectBriefData>(() => {
     try {
-      const saved = localStorage.getItem(KEY);
+      const saved = readStoredValue(KEY);
       return saved ? { ...DEFAULT_BRIEF, ...JSON.parse(saved) } : DEFAULT_BRIEF;
     } catch {
       return DEFAULT_BRIEF;
     }
   });
+  const [saveError, setSaveError] = useState(false);
   const update = (patch: Partial<ProjectBriefData>) => setBrief((current) => ({ ...current, ...patch }));
   const save = () => {
-    localStorage.setItem(KEY, JSON.stringify(brief));
-    onClose();
+    const saved = writeStoredValue(KEY, JSON.stringify(brief));
+    setSaveError(!saved);
+    if (saved) onClose();
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-fade-in">
-      <section role="dialog" aria-modal="true" aria-label="Project brief" className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-surface-700 bg-surface-900 shadow-2xl">
+      <section ref={dialogRef} role="dialog" aria-modal="true" aria-label="Project brief" className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-surface-700 bg-surface-900 shadow-2xl">
         <header className="flex items-start justify-between border-b border-surface-700 px-5 py-4">
           <div className="flex gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/15 text-accent"><ClipboardList size={18} /></div>
@@ -74,7 +79,9 @@ export function ProjectBrief({ onClose, onExport }: ProjectBriefProps) {
           <label className="space-y-1.5 text-xs text-surface-300 sm:col-span-2"><span>Design objective</span><textarea value={brief.objective} onChange={(event) => update({ objective: event.target.value })} className="min-h-20 w-full resize-y rounded-lg border border-surface-700 bg-surface-800 px-3 py-2 text-xs text-surface-100 outline-none focus:border-accent" /></label>
           <label className="space-y-1.5 text-xs text-surface-300 sm:col-span-2"><span>Notes and design decisions</span><textarea value={brief.notes} onChange={(event) => update({ notes: event.target.value })} placeholder="What changed, what worked, and what you learned…" className="min-h-24 w-full resize-y rounded-lg border border-surface-700 bg-surface-800 px-3 py-2 text-xs text-surface-100 outline-none focus:border-accent placeholder:text-surface-600" /></label>
         </div>
-        <footer className="flex flex-col-reverse gap-2 border-t border-surface-700 px-5 py-4 sm:flex-row sm:justify-end">
+        <footer className="flex flex-col-reverse gap-2 border-t border-surface-700 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          {saveError && <p role="alert" className="text-xs text-warn">Couldn’t save in this browser. Export the brief to keep your work.</p>}
+          {!saveError && <span />}
           <button type="button" onClick={() => onExport(brief)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-surface-700 px-3 py-2 text-xs text-surface-300 hover:border-accent/50 hover:text-accent"><Download size={14} /> Export brief</button>
           <button type="button" onClick={save} className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-surface-950 hover:bg-teal-300"><Save size={14} /> Save project brief</button>
         </footer>

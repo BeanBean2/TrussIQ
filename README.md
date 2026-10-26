@@ -1,43 +1,42 @@
 # TrussIQ
 
-Congressional App Challenge–ready **2D/3D Finite Element Analysis** lab for pin-jointed trusses — built for high-school physics, VEX/FTC robotics, and intro engineering.
+TrussIQ is an educational workspace for building and analyzing planar, pin-jointed truss models. It is intended for classroom physics, robotics, and introductory engineering activities.
 
-## Highlight features
+## What it does
 
-| Capability | How to use |
-|------------|------------|
-| Direct Stiffness Method FEA | **Run FEA** or press **Space** |
-| Wind / Seismic dynamics | **Dynamics** menu |
-| Plastic collapse animation | **Collapse** |
-| 3D extrusion + GLB WebAR export | **3D/AR** |
-| Pratt vs Warren comparison | **Compare** |
-| Per-member sections & materials | Select a beam → Inspect panel |
-| AI buckling / zero-force coach | Sidebar → **AI** |
-| Formula Inspector + Classroom tour | Select beam / **Book** icon |
-| Shortcuts | Press **?** |
-| Guided modeling + live analysis status | Start on the canvas / top-bar status |
-| Smooth collapse playback + reduced-motion support | **Collapse** / follows system accessibility settings |
-| Automatic local save + resume | Return to the start screen after a refresh |
+- Build a 2D truss on a snap-to-grid canvas; edit nodes, supports, loads, sections, and materials.
+- Solve the linear Direct Stiffness Method model and inspect member forces, stress, yield utilization, displacement, and reactions.
+- Review model checks, compare load cases and materials, and explore rule-based engineering guidance.
+- Export a 3D extrusion as GLB, save local drafts, and export analysis reports.
+- Use guided examples, engineering challenges, and a Congressional App Challenge preparation checklist.
 
-## Quick start
+## Engineering scope
+
+The solver models planar, pin-jointed members with linear elastic axial behavior. Wind and seismic features apply quasi-static load cases; they are not time-domain structural dynamics. The results are for learning and exploration, not construction design or safety certification. The in-app engineering coach uses local rules and solver results; it is not a hosted generative AI service.
+
+## Run locally
 
 ```bash
 npm install
 npm run dev
 ```
 
-### Share the local app with VS Code Live Share
+## Verify changes
 
-The development server listens on port `5173` so a trusted collaborator can open it through Live Share:
+```bash
+npm run lint
+npm test
+npm run build
+```
 
-1. Start the app with `npm run dev`.
-2. Open the **Ports** view in VS Code.
-3. Find port `5173`, right-click it, and choose **Forward Port** (or **Share Port** in Live Share).
-4. Send the generated forwarded URL to your collaborator.
-5. They open that URL in their browser; they do not use your `localhost` URL, since `localhost` would point to their own computer.
+`npm test` checks the sample models, force equilibrium, solver rejection cases, and design import/export validation. The GitHub Pages workflow runs lint, tests, and the production build before deploying.
 
-Only share the port with people you trust. Stop the dev server or remove the forwarded port when you are finished.
+## Technology
 
-## Stack
+Vite, React, TypeScript, Tailwind CSS, Three.js, Recharts, and jsPDF.
 
-Vite · React 19 · TypeScript · Tailwind v4 · Three.js · Recharts · jsPDF
+See [third-party and AI assistance disclosures](THIRD_PARTY_NOTICES.md) for the direct dependency inventory and a record of AI-assisted development in this repository.
+
+## Congressional App Challenge note
+
+The 2026 rules permit AI tools but require AI use to be disclosed in the submission materials. This repository has received AI-assisted code contributions. Entrants should document the tools and tasks accurately, ensure the student team makes significant original contributions, and be prepared to explain and demonstrate the code. Eligibility and submission requirements are determined by the official contest portal and current rulebook.

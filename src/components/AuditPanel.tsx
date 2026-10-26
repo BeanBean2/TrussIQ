@@ -14,13 +14,14 @@ export function AuditPanel({ audit, onFocusBeams, onFocusNodes }: AuditPanelProp
         <div className="flex items-center gap-2">
           {audit.ready ? <CheckCircle2 size={17} className="text-pass" /> : <ShieldAlert size={17} className="text-warn" />}
           <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-200">{audit.ready ? 'Ready for analysis' : 'Review before analysis'}</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-200">{audit.ready ? 'Input checks passed' : 'Review model inputs'}</h3>
             <p className="mt-1 text-[10px] text-surface-400">{audit.errors} errors · {audit.warnings} warnings</p>
           </div>
         </div>
+        <p className="mt-2 pl-6 text-[10px] leading-4 text-surface-400">These checks catch common model input issues. Run the solver to check whether the support layout and geometry are stable.</p>
       </div>
       {audit.issues.length === 0 ? (
-        <p className="text-xs text-surface-500">No structural issues detected.</p>
+        <p className="text-xs text-surface-500">No basic input issues detected; geometric stability is checked separately by the solver.</p>
       ) : (
         <ul className="space-y-2">
           {audit.issues.map((issue) => <IssueCard key={issue.id} issue={issue} onFocus={() => { if (issue.beamIds?.length) onFocusBeams(issue.beamIds); if (issue.nodeIds?.length) onFocusNodes(issue.nodeIds); }} />)}

@@ -2,7 +2,7 @@ import {
   CircleDot,
   Eraser,
   Hand,
-  Magnet,
+  Link2,
   MousePointer2,
   MoveDown,
 } from 'lucide-react';
@@ -19,7 +19,7 @@ interface ToolDef {
 const TOOLS: ToolDef[] = [
   { id: 'select', label: 'Select', hotkey: 'V', icon: <MousePointer2 size={18} /> },
   { id: 'node', label: 'Node', hotkey: 'N', icon: <CircleDot size={18} /> },
-  { id: 'beam', label: 'Beam', hotkey: 'B', icon: <Magnet size={18} /> },
+  { id: 'beam', label: 'Beam', hotkey: 'B', icon: <Link2 size={18} /> },
   { id: 'force', label: 'Force', hotkey: 'F', icon: <MoveDown size={18} /> },
   { id: 'support', label: 'Support', hotkey: 'S', icon: <Hand size={18} /> },
   { id: 'erase', label: 'Erase', hotkey: 'E', icon: <Eraser size={18} /> },

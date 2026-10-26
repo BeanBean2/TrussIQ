@@ -105,14 +105,34 @@ export function applySeismicLoads(
 ): Node[] {
   const a = seismic.amplitude * Math.sin(seismic.omega * seismic.time); // m/s²
   return nodes.map((n) => {
-    if (n.support === 'fixed' || n.support === 'pin') {
-      // Base nodes: ground motion is the driver; keep user loads, add small base shove for visualization
-      return { ...n, fx: n.fx + a * 0.5 };
-    }
+    // The reduced static model applies horizontal inertia only to free X DOFs.
+    if (n.support === 'fixed' || n.support === 'pin' || n.support === 'rollerX') return { ...n };
     const m = lumpedMassKg(n.id, nodes, beams);
     const Fx = m * a; // kg·m/s² = N; no length-unit conversion is needed for force
     return { ...n, fx: n.fx + Fx };
   });
+}
+
+/** Add member dead weight and scale the complete service load vector. Canvas +Y points downward. */
+export function applySelfWeightLoads(nodes: Node[], beams: Beam[], serviceLoadFactor = 1): Node[] {
+  const nodeLoads = new Map(nodes.map((node) => [node.id, 0]));
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+  for (const beam of beams) {
+    const start = nodeMap.get(beam.nodeI);
+    const end = nodeMap.get(beam.nodeJ);
+    if (!start || !end || !Number.isFinite(beam.area) || beam.area <= 0) continue;
+    const length = Math.hypot(end.x - start.x, end.y - start.y);
+    if (!Number.isFinite(length) || length <= 0) continue;
+    const massKg = getMaterial(beam.materialId).density * beam.area * length / 1_000_000;
+    const weightAtEachEnd = massKg * 9.81 / 2;
+    nodeLoads.set(start.id, (nodeLoads.get(start.id) ?? 0) + weightAtEachEnd);
+    nodeLoads.set(end.id, (nodeLoads.get(end.id) ?? 0) + weightAtEachEnd);
+  }
+  return nodes.map((node) => ({
+    ...node,
+    fx: node.fx * serviceLoadFactor,
+    fy: node.fy * serviceLoadFactor + (nodeLoads.get(node.id) ?? 0),
+  }));
 }
 
 /**

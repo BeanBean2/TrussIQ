@@ -163,5 +163,5 @@ export async function downloadTrussGLB(
   a.href = url;
   a.download = filename.endsWith('.glb') ? filename : `${filename}.glb`;
   a.click();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

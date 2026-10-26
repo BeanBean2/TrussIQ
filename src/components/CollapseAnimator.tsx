@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, Pause, Play, SkipForward, X, Zap } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { useAccessibleDialog } from '../hooks/useAccessibleDialog';
 import { runCollapseSequence } from '../lib/collapseEngine';
 import { stressColor } from '../lib/feaEngine';
 import type { Beam, CollapseFrame, Node } from '../lib/types';
@@ -14,15 +15,12 @@ interface CollapseAnimatorProps {
  * Animated incremental load test with progressive member failure visualization.
  */
 export function CollapseAnimator({ nodes, beams, onClose }: CollapseAnimatorProps) {
+  const dialogRef = useAccessibleDialog(onClose);
   const frames = useMemo(() => runCollapseSequence(nodes, beams), [nodes, beams]);
-  const [index, setIndex] = useState(0);
+  const [requestedIndex, setIndex] = useState(0);
+  const index = Math.min(requestedIndex, Math.max(frames.length - 1, 0));
   const [playing, setPlaying] = useState(true);
   const [intervalMs, setIntervalMs] = useState(700);
-
-  useEffect(() => {
-    setIndex(0);
-    setPlaying(true);
-  }, [frames]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -63,7 +61,7 @@ export function CollapseAnimator({ nodes, beams, onClose }: CollapseAnimatorProp
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-fade-in">
-      <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-surface-700 bg-surface-900 shadow-2xl">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Plastic collapse animation" className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-surface-700 bg-surface-900 shadow-2xl">
         <div className="flex items-center justify-between border-b border-surface-700 px-4 py-3">
           <div className="flex items-center gap-2">
             <Zap size={16} className="text-warn" />
@@ -74,6 +72,7 @@ export function CollapseAnimator({ nodes, beams, onClose }: CollapseAnimatorProp
               <p className="text-[11px] text-surface-400">
                 Incremental load 0→150% · failed members snap &amp; redistribute
               </p>
+              <p className="text-[10px] text-surface-500">This simplified animation removes members at yield; it does not model buckling, joint failure, or real collapse behavior.</p>
             </div>
           </div>
           <button
@@ -118,7 +117,7 @@ export function CollapseAnimator({ nodes, beams, onClose }: CollapseAnimatorProp
               {frame?.collapsed ? (
                 <span className="font-semibold text-fail">COLLAPSED</span>
               ) : frame?.result.passed ? (
-                <span className="text-pass">Stable</span>
+                <span className="text-pass">No modeled yield yet</span>
               ) : (
                 <span className="text-warn">Yielding</span>
               )}

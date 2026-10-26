@@ -11,6 +11,9 @@ export default defineConfig({
     strictPort: true,
   },
   plugins: [react(), tailwindcss()],
+  build: {
+    manifest: true,
+  },
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),

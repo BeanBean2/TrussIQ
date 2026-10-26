@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useAccessibleDialog } from '../hooks/useAccessibleDialog';
 
 interface ForceModalProps {
   nodeId: string;
@@ -10,30 +11,30 @@ interface ForceModalProps {
 }
 
 export function ForceModal({ nodeId, initialFx, initialFy, onApply, onClose }: ForceModalProps) {
+  const dialogRef = useAccessibleDialog(onClose);
   const [fx, setFx] = useState(String(initialFx));
   const [fy, setFy] = useState(String(initialFy));
 
+  const handleApply = useCallback(() => {
+    const nx = Number(fx);
+    const ny = Number(fy);
+    if (Number.isFinite(nx) && Number.isFinite(ny)) onApply(nx, ny);
+  }, [fx, fy, onApply]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-      if (e.key === 'Enter') handleApply();
+      if (e.key === 'Enter' && e.target instanceof HTMLInputElement) {
+        e.preventDefault();
+        handleApply();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fx, fy]);
-
-  const handleApply = () => {
-    const nx = Number(fx);
-    const ny = Number(fy);
-    if (Number.isFinite(nx) && Number.isFinite(ny)) {
-      onApply(nx, ny);
-    }
-  };
+  }, [handleApply]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-sm rounded-xl border border-surface-700 bg-surface-900 shadow-2xl">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={`Apply force at node ${nodeId}`} className="w-full max-w-sm rounded-xl border border-surface-700 bg-surface-900 shadow-2xl">
         <div className="flex items-center justify-between border-b border-surface-700 px-4 py-3">
           <h2 className="text-sm font-semibold tracking-wide text-surface-100">
             Apply Force — {nodeId}
@@ -55,6 +56,7 @@ export function ForceModal({ nodeId, initialFx, initialFy, onApply, onClose }: F
             <span className="text-xs font-medium text-surface-300">Fₓ (N)</span>
             <input
               type="number"
+              data-dialog-initial-focus
               value={fx}
               onChange={(e) => setFx(e.target.value)}
               className="w-full rounded-lg border border-surface-700 bg-surface-800 px-3 py-2 font-mono text-sm text-surface-100 outline-none focus:border-accent"

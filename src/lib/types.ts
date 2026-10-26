@@ -89,8 +89,9 @@ export interface FEAResult {
   displacements: NodalDisplacement[];
   /** Reactions recovered at constrained degrees of freedom (N). */
   reactions?: SupportReaction[];
-  /** Max |σ|/σ_yield across all members */
+  /** Maximum |stress| / yield stress across members; this is not a complete safety factor. */
   maxSafetyRatio: number;
+  /** True when no member exceeds material yield in the linear axial-only model. */
   passed: boolean;
 }
 

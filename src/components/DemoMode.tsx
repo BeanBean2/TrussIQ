@@ -1,4 +1,5 @@
 import { ArrowRight, BookOpen, LineChart, Play, X } from 'lucide-react';
+import { useAccessibleDialog } from '../hooks/useAccessibleDialog';
 
 interface DemoModeProps {
   onClose: () => void;
@@ -6,9 +7,10 @@ interface DemoModeProps {
 }
 
 export function DemoMode({ onClose, onLaunch }: DemoModeProps) {
+  const dialogRef = useAccessibleDialog(onClose);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-surface-700 bg-surface-900 shadow-2xl">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Guided demo" className="w-full max-w-2xl overflow-hidden rounded-2xl border border-surface-700 bg-surface-900 shadow-2xl">
         <div className="flex items-start justify-between border-b border-surface-700 px-5 py-4">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-accent">Guided demo</p>
@@ -29,7 +31,7 @@ export function DemoMode({ onClose, onLaunch }: DemoModeProps) {
         </div>
 
         <div className="flex flex-col-reverse items-stretch justify-between gap-3 border-t border-surface-700 px-5 py-4 sm:flex-row sm:items-center">
-          <p className="text-[11px] text-surface-500">The current design is saved locally before the demo begins.</p>
+          <p className="text-[11px] text-surface-500">Launching replaces the current model with the Warren sample. Use Undo before leaving to restore your previous design; otherwise the sample may become your saved draft.</p>
           <button type="button" onClick={onLaunch} className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-surface-950 hover:bg-teal-400">
             <Play size={14} fill="currentColor" /> Launch guided model
           </button>

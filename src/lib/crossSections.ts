@@ -37,6 +37,30 @@ export interface SectionProperties {
   label: string;
 }
 
+/** Validate section dimensions before using them in analysis or imported files. */
+export function isValidSectionParams(value: unknown): value is SectionParams {
+  if (!value || typeof value !== 'object') return false;
+  const section = value as Record<string, unknown>;
+  const finitePositive = (...values: unknown[]) => values.every((item) => typeof item === 'number' && Number.isFinite(item) && item > 0);
+  if (section.kind === 'solidRod') {
+    if (!finitePositive(section.diameter) || (section.diameter as number) < 0.1) return false;
+  } else if (section.kind === 'hollowTube') {
+    if (!finitePositive(section.outerDiameter) || typeof section.innerDiameter !== 'number' ||
+      !Number.isFinite(section.innerDiameter) || (section.outerDiameter as number) < 0.2 || section.innerDiameter < 0 || section.innerDiameter >= (section.outerDiameter as number)) return false;
+  } else if (section.kind === 'iBeam') {
+    if (!finitePositive(section.height, section.flangeWidth, section.flangeThickness, section.webThickness) ||
+      (section.height as number) < 1 || (section.flangeWidth as number) < 1 ||
+      (section.flangeThickness as number) < 0.1 || (section.webThickness as number) < 0.1 ||
+      (section.height as number) <= 2 * (section.flangeThickness as number) ||
+      (section.webThickness as number) > (section.flangeWidth as number)) return false;
+  } else {
+    return false;
+  }
+
+  const props = computeSectionProps(value as SectionParams);
+  return Number.isFinite(props.area) && props.area > 0 && Number.isFinite(props.I) && props.I > 0;
+}
+
 export const DEFAULT_SECTION: SectionParams = {
   kind: 'solidRod',
   diameter: 11.28, // ≈ 100 mm² solid circle
@@ -46,7 +70,7 @@ export const DEFAULT_SECTION: SectionParams = {
 export function computeSectionProps(section: SectionParams): SectionProperties {
   switch (section.kind) {
     case 'solidRod': {
-      const r = Math.max(section.diameter, 0.1) / 2;
+      const r = section.diameter / 2;
       const area = Math.PI * r * r;
       // I = π r⁴ / 4
       const I = (Math.PI * r * r * r * r) / 4;
@@ -57,8 +81,8 @@ export function computeSectionProps(section: SectionParams): SectionProperties {
       };
     }
     case 'hollowTube': {
-      const Ro = Math.max(section.outerDiameter, 0.2) / 2;
-      const Ri = Math.min(Math.max(section.innerDiameter, 0) / 2, Ro * 0.95);
+      const Ro = section.outerDiameter / 2;
+      const Ri = section.innerDiameter / 2;
       const area = Math.PI * (Ro * Ro - Ri * Ri);
       // I = π/4 (Ro⁴ − Ri⁴)
       const I = (Math.PI / 4) * (Ro ** 4 - Ri ** 4);
@@ -69,11 +93,11 @@ export function computeSectionProps(section: SectionParams): SectionProperties {
       };
     }
     case 'iBeam': {
-      const h = Math.max(section.height, 1);
-      const bf = Math.max(section.flangeWidth, 1);
-      const tf = Math.max(section.flangeThickness, 0.1);
-      const tw = Math.max(section.webThickness, 0.1);
-      const hw = Math.max(h - 2 * tf, 0.1);
+      const h = section.height;
+      const bf = section.flangeWidth;
+      const tf = section.flangeThickness;
+      const tw = section.webThickness;
+      const hw = h - 2 * tf;
       // Area = 2·bf·tf + hw·tw
       const area = 2 * bf * tf + hw * tw;
       // I about strong axis (parallel to flanges): 
@@ -94,7 +118,8 @@ export function computeSectionProps(section: SectionParams): SectionProperties {
 
 /** Build a solid rod that approximately matches a target area (mm²). */
 export function solidRodFromArea(area: number): SolidRodParams {
-  const diameter = 2 * Math.sqrt(Math.max(area, 1) / Math.PI);
+  const validArea = Number.isFinite(area) && area > 0 ? area : 1;
+  const diameter = 2 * Math.sqrt(Math.max(validArea, 1) / Math.PI);
   return { kind: 'solidRod', diameter };
 }
 

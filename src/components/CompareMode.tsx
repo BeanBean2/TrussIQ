@@ -1,5 +1,6 @@
 import { Columns2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { useAccessibleDialog } from '../hooks/useAccessibleDialog';
 import { solveTruss } from '../lib/feaEngine';
 import { computeMassCost } from '../lib/massCost';
 import { PRESET_LOADERS, type PresetKey } from '../lib/presets';
@@ -14,6 +15,7 @@ interface CompareModeProps {
  * Side-by-side comparison of two bridge designs under identical analysis metrics.
  */
 export function CompareMode({ current, onClose }: CompareModeProps) {
+  const dialogRef = useAccessibleDialog(onClose);
   const [leftKey, setLeftKey] = useState<PresetKey | 'current'>('current');
   const [rightKey, setRightKey] = useState<PresetKey>('warren');
 
@@ -32,7 +34,7 @@ export function CompareMode({ current, onClose }: CompareModeProps) {
   const rightDefl = maxDeflection(rightResult);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-surface-950/95 backdrop-blur-sm animate-fade-in">
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Split-screen design comparison" className="fixed inset-0 z-50 flex flex-col bg-surface-950/95 backdrop-blur-sm animate-fade-in">
       <div className="flex items-center justify-between border-b border-surface-700 px-4 py-3">
         <div className="flex items-center gap-2">
           <Columns2 size={16} className="text-accent" />
@@ -180,7 +182,7 @@ function CompareCard({
           value={Number.isFinite(maxDefl) ? `${maxDefl.toExponential(2)} mm` : 'unstable'}
         />
         <Metric label="Peak |σ|/σy" value={`${(maxRatio * 100).toFixed(0)}%`} />
-        <Metric label="Status" value={passed ? 'PASSED' : 'FAILED'} warn={!passed} />
+        <Metric label="Yield check" value={passed ? 'Below yield' : 'Yield exceeded'} warn={!passed} />
       </div>
     </div>
   );

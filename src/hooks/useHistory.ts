@@ -18,60 +18,60 @@ function sameSnapshot(a: StructureState, b: StructureState): boolean {
 
 /**
  * Undo / redo stack for the truss structure (Ctrl+Z / Ctrl+Y).
+ * History mutations happen in event callbacks rather than React state updaters,
+ * which keeps them safe when Strict Mode replays updater functions.
  */
 export function useHistory(initial: StructureState) {
   const [state, setState] = useState<StructureState>(() => cloneState(initial));
+  const current = useRef(state);
   const past = useRef<StructureState[]>([]);
   const future = useRef<StructureState[]>([]);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
 
-  const syncFlags = () => {
+  const syncFlags = useCallback(() => {
     setCanUndo(past.current.length > 0);
     setCanRedo(future.current.length > 0);
-  };
+  }, []);
+
+  const update = useCallback((next: StructureState) => {
+    current.current = next;
+    setState(next);
+    syncFlags();
+  }, [syncFlags]);
+
+  const pushPast = useCallback((snapshot: StructureState) => {
+    past.current = [...past.current.slice(-(MAX_HISTORY - 1)), cloneState(snapshot)];
+    future.current = [];
+  }, []);
 
   const commit = useCallback((next: StructureState | ((prev: StructureState) => StructureState)) => {
-    setState((prev) => {
-      const resolved = typeof next === 'function' ? next(prev) : next;
-      const snap = cloneState(resolved);
-      if (sameSnapshot(prev, snap)) return prev;
-      past.current = [...past.current.slice(-(MAX_HISTORY - 1)), cloneState(prev)];
-      future.current = [];
-      queueMicrotask(syncFlags);
-      return snap;
-    });
-  }, []);
+    const prev = current.current;
+    const snapshot = cloneState(typeof next === 'function' ? next(prev) : next);
+    if (sameSnapshot(prev, snapshot)) return;
+    pushPast(prev);
+    update(snapshot);
+  }, [pushPast, update]);
 
   const replace = useCallback((next: StructureState) => {
-    // Load preset / import — push previous onto undo stack
-    setState((prev) => {
-      past.current = [...past.current.slice(-(MAX_HISTORY - 1)), cloneState(prev)];
-      future.current = [];
-      queueMicrotask(syncFlags);
-      return cloneState(next);
-    });
-  }, []);
+    // Loading a preset or import remains undoable.
+    pushPast(current.current);
+    update(cloneState(next));
+  }, [pushPast, update]);
 
   const undo = useCallback(() => {
-    setState((prev) => {
-      const last = past.current.pop();
-      if (!last) return prev;
-      future.current.push(cloneState(prev));
-      queueMicrotask(syncFlags);
-      return last;
-    });
-  }, []);
+    const previous = past.current.pop();
+    if (!previous) return;
+    future.current.push(cloneState(current.current));
+    update(previous);
+  }, [update]);
 
   const redo = useCallback(() => {
-    setState((prev) => {
-      const next = future.current.pop();
-      if (!next) return prev;
-      past.current.push(cloneState(prev));
-      queueMicrotask(syncFlags);
-      return next;
-    });
-  }, []);
+    const next = future.current.pop();
+    if (!next) return;
+    past.current.push(cloneState(current.current));
+    update(next);
+  }, [update]);
 
   return { state, commit, replace, undo, redo, canUndo, canRedo };
 }

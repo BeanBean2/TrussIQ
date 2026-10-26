@@ -1,4 +1,5 @@
 import {
+
   BookOpen,
   Box,
   ChevronDown,
@@ -29,6 +30,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { PRESET_LOADERS, type PresetKey } from '../lib/presets';
 import type { DynamicsMode, GridSize, ThemeMode } from '../lib/types';
 
@@ -46,6 +48,8 @@ interface TopBarProps {
   onDeflectionScale: (s: number) => void;
   onRunSolver: () => void;
   onLoadPreset: (key: PresetKey) => void;
+  onOpenTemplateLibrary: () => void;
+  onOpenGeometryTools: () => void;
   onClear: () => void;
   onExportTruss: () => void;
   onCopyTruss: () => void;
@@ -58,6 +62,7 @@ interface TopBarProps {
   onRedo: () => void;
   onOpenTutorial: () => void;
   onDynamicsMode: (m: DynamicsMode) => void;
+  onOpenLoadCaseStudy: () => void;
   onWindProfile: (profile: 'standard' | 'storm') => void;
   onOpenCollapse: () => void;
   onOpenAR: () => void;
@@ -73,6 +78,10 @@ interface TopBarProps {
   onOpenHome: () => void;
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
+  uiScale: number;
+  onUiScale: (scale: number) => void;
+  soundsEnabled: boolean;
+  onToggleSounds: () => void;
   nodeCount: number;
   beamCount: number;
   analysisLabel: string;
@@ -92,6 +101,8 @@ export function TopBar({
   onDeflectionScale,
   onRunSolver,
   onLoadPreset,
+  onOpenTemplateLibrary,
+  onOpenGeometryTools,
   onClear,
   onExportTruss,
   onCopyTruss,
@@ -104,6 +115,7 @@ export function TopBar({
   onRedo,
   onOpenTutorial,
   onDynamicsMode,
+  onOpenLoadCaseStudy,
   onWindProfile,
   onOpenCollapse,
   onOpenAR,
@@ -128,6 +140,27 @@ export function TopBar({
   const [dynOpen, setDynOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const barRef = useRef<HTMLElement>(null);
+  const presetsMenuRef = useRef<HTMLDivElement>(null);
+  const dynamicsMenuRef = useRef<HTMLDivElement>(null);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+  const [presetsPosition, setPresetsPosition] = useState({ top: 56, left: 8 });
+  const [dynamicsPosition, setDynamicsPosition] = useState({ top: 56, left: 8 });
+  const [exportPosition, setExportPosition] = useState({ top: 56, left: 8 });
+
+  const positionMenu = (event: React.MouseEvent<HTMLButtonElement>, width: number) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const height = Math.min(460, window.innerHeight - 16);
+    return {
+      top: Math.min(rect.bottom + 8, window.innerHeight - height - 8),
+      left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
+    };
+  };
+
+  const closeOnViewportChange = () => {
+    setPresetsOpen(false);
+    setExportOpen(false);
+    setDynOpen(false);
+  };
 
   useEffect(() => {
     const closeMenus = (event: KeyboardEvent) => {
@@ -138,22 +171,26 @@ export function TopBar({
       }
     };
     const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (!barRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+      const insideMenu = presetsMenuRef.current?.contains(target) || dynamicsMenuRef.current?.contains(target) || exportMenuRef.current?.contains(target);
+      if (!barRef.current?.contains(target) && !insideMenu) {
         setPresetsOpen(false);
         setExportOpen(false);
         setDynOpen(false);
       }
     };
     window.addEventListener('keydown', closeMenus);
+    window.addEventListener('resize', closeOnViewportChange);
     document.addEventListener('pointerdown', closeOnOutsidePointer);
     return () => {
       window.removeEventListener('keydown', closeMenus);
+      window.removeEventListener('resize', closeOnViewportChange);
       document.removeEventListener('pointerdown', closeOnOutsidePointer);
     };
   }, []);
 
   return (
-    <header ref={barRef} className="relative flex h-14 min-w-0 shrink-0 items-center gap-1.5 overflow-visible border-b border-surface-700/80 bg-surface-900/95 px-2 shadow-[0_8px_30px_rgba(0,0,0,0.12)] backdrop-blur-xl">
+    <header ref={barRef} className="workspace-topbar relative z-40 flex h-auto min-h-14 min-w-0 flex-wrap items-center gap-1.5 overflow-visible border-b border-surface-700/80 bg-surface-900/95 px-2 py-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.12)] backdrop-blur-xl">
       <button type="button" onClick={onOpenHome} title="Back to home" className="group flex shrink-0 items-center gap-2 border-r border-surface-700 pr-2 text-left">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/20 text-sm font-bold text-accent transition group-hover:bg-accent group-hover:text-surface-950">
           IQ
@@ -197,8 +234,10 @@ export function TopBar({
       <div className="relative shrink-0">
         <button
           type="button"
-          onClick={() => {
-            setPresetsOpen((v) => !v);
+          onClick={(event) => {
+            const opening = !presetsOpen;
+            if (opening) setPresetsPosition(positionMenu(event, 256));
+            setPresetsOpen(opening);
             setExportOpen(false);
             setDynOpen(false);
           }}
@@ -215,13 +254,23 @@ export function TopBar({
           Presets <ChevronDown size={12} className={`transition-transform duration-200 ${presetsOpen ? 'rotate-180' : ''}`} />
         </button>
         {presetsOpen && (
-          <>
-            <div className="fixed inset-0 z-10" onClick={() => setPresetsOpen(false)} />
-            <div id="presets-menu" role="menu" aria-label="Truss presets" className="dropdown-enter menu-expand absolute left-0 top-full z-20 mt-2 w-64 overflow-hidden rounded-xl border border-surface-600/80 bg-surface-800/95 p-1.5 shadow-2xl shadow-black/30 backdrop-blur-xl">
+          createPortal(
+            <div ref={presetsMenuRef} id="presets-menu" role="menu" aria-label="Truss presets" style={presetsPosition} className="dropdown-enter menu-expand fixed z-[200] w-64 overflow-hidden rounded-xl border border-surface-600/80 bg-surface-800/95 p-1.5 shadow-2xl shadow-black/30 backdrop-blur-xl">
               <div className="px-3 pb-1.5 pt-1">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-accent">Choose a starting model</p>
                 <p className="mt-0.5 text-[10px] text-surface-500">Load geometry, supports, and sample forces.</p>
               </div>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => { onOpenTemplateLibrary(); setPresetsOpen(false); }}
+                className="mb-1 block w-full rounded-lg border-b border-surface-700 px-3 py-2.5 text-left text-xs font-medium text-accent hover:bg-accent/10"
+              >
+                Save or open my templates
+              </button>
+              <button type="button" role="menuitem" onClick={() => { onOpenGeometryTools(); setPresetsOpen(false); }} className="mb-1 block w-full rounded-lg border-b border-surface-700 px-3 py-2.5 text-left text-xs font-medium text-accent hover:bg-accent/10">
+                Geometry and load tools
+              </button>
               {(Object.keys(PRESET_LOADERS) as PresetKey[]).map((key) => (
                 <button
                   key={key}
@@ -236,8 +285,9 @@ export function TopBar({
                   {PRESET_LOADERS[key].label}
                 </button>
               ))}
-            </div>
-          </>
+            </div>,
+            document.body,
+          )
         )}
       </div>
 
@@ -245,8 +295,10 @@ export function TopBar({
       <div className="relative shrink-0">
         <button
           type="button"
-          onClick={() => {
-            setDynOpen((v) => !v);
+          onClick={(event) => {
+            const opening = !dynOpen;
+            if (opening) setDynamicsPosition(positionMenu(event, 240));
+            setDynOpen(opening);
             setPresetsOpen(false);
             setExportOpen(false);
           }}
@@ -267,9 +319,8 @@ export function TopBar({
           <ChevronDown size={12} className={`transition-transform duration-200 ${dynOpen ? 'rotate-180' : ''}`} />
         </button>
         {dynOpen && (
-          <>
-            <div className="fixed inset-0 z-10" onClick={() => setDynOpen(false)} />
-            <div id="dynamics-menu" role="menu" aria-label="Loading scenarios" className="dropdown-enter menu-expand absolute left-0 top-full z-20 mt-2 w-60 overflow-hidden rounded-xl border border-surface-600/80 bg-surface-800/95 p-1.5 shadow-2xl shadow-black/30 backdrop-blur-xl">
+          createPortal(
+            <div ref={dynamicsMenuRef} id="dynamics-menu" role="menu" aria-label="Loading scenarios" style={dynamicsPosition} className="dropdown-enter menu-expand fixed z-[200] w-60 overflow-hidden rounded-xl border border-surface-600/80 bg-surface-800/95 p-1.5 shadow-2xl shadow-black/30 backdrop-blur-xl">
               <div className="px-3 pb-1.5 pt-1">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-warn">Choose a load case</p>
                 <p className="mt-0.5 text-[10px] text-surface-500">Apply an environment and re-solve the model.</p>
@@ -312,8 +363,13 @@ export function TopBar({
                 <span className="block">Storm wind test</span>
                 <span className="mt-0.5 block text-[10px] text-surface-500">Severe wind · 42 m/s</span>
               </button>
-            </div>
-          </>
+              <div className="my-1 border-t border-surface-700" />
+              <button type="button" role="menuitem" onClick={() => { onOpenLoadCaseStudy(); setDynOpen(false); }} className="block w-full rounded-lg px-3 py-2.5 text-left text-xs text-accent hover:bg-accent/10">
+                Compare 9 load cases
+              </button>
+            </div>,
+            document.body,
+          )
         )}
       </div>
 
@@ -554,8 +610,10 @@ export function TopBar({
         <div className="relative">
           <button
             type="button"
-            onClick={() => {
-              setExportOpen((v) => !v);
+            onClick={(event) => {
+              const opening = !exportOpen;
+              if (opening) setExportPosition(positionMenu(event, 240));
+              setExportOpen(opening);
               setPresetsOpen(false);
               setDynOpen(false);
             }}
@@ -573,9 +631,8 @@ export function TopBar({
             <ChevronDown size={12} />
           </button>
           {exportOpen && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setExportOpen(false)} />
-              <div role="menu" className="dropdown-enter absolute right-0 top-full z-20 mt-2 w-60 overflow-hidden rounded-xl border border-surface-600/80 bg-surface-800/95 p-1.5 shadow-2xl shadow-black/30 backdrop-blur-xl">
+            createPortal(
+              <div ref={exportMenuRef} role="menu" aria-label="Export and import" style={exportPosition} className="dropdown-enter fixed z-[200] w-60 overflow-hidden rounded-xl border border-surface-600/80 bg-surface-800/95 p-1.5 shadow-2xl shadow-black/30 backdrop-blur-xl">
                 <button
                   type="button"
                   role="menuitem"
@@ -620,8 +677,9 @@ export function TopBar({
                 >
                   <HelpCircle size={14} /> Official Report PDF
                 </button>
-              </div>
-            </>
+              </div>,
+              document.body,
+            )
           )}
         </div>
       </div>

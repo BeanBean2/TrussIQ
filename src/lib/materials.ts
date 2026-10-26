@@ -7,7 +7,7 @@ import type { Material } from './types';
 export const MATERIALS: Material[] = [
   {
     id: 'al6061',
-    name: 'Aluminum 6061-T6',
+    name: 'Aluminum',
     E: 68.9,
     sigmaYield: 276,
     density: 2.7,
@@ -16,7 +16,7 @@ export const MATERIALS: Material[] = [
   },
   {
     id: 'steel',
-    name: 'Structural Steel',
+    name: 'Steel',
     E: 200,
     sigmaYield: 250,
     density: 7.85,
@@ -25,7 +25,7 @@ export const MATERIALS: Material[] = [
   },
   {
     id: 'pla',
-    name: 'PLA Plastic',
+    name: 'Plastic',
     E: 3.5,
     sigmaYield: 50,
     density: 1.24,
@@ -34,7 +34,7 @@ export const MATERIALS: Material[] = [
   },
   {
     id: 'cfiber',
-    name: 'Carbon Fiber Composite',
+    name: 'Carbon fiber',
     E: 70,
     sigmaYield: 600,
     density: 1.6,
@@ -43,12 +43,21 @@ export const MATERIALS: Material[] = [
   },
   {
     id: 'titanium',
-    name: 'Titanium Ti-6Al-4V',
+    name: 'Titanium',
     E: 113.8,
     sigmaYield: 880,
     density: 4.43,
     costUSDPerKg: 45,
     color: '#94a3b8',
+  },
+  {
+    id: 'rope',
+    name: 'Rope',
+    E: 2.5,
+    sigmaYield: 250,
+    density: 1.2,
+    costUSDPerKg: 3,
+    color: '#c98545',
   },
 ];
 

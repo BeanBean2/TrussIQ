@@ -1,4 +1,5 @@
 import { Keyboard, X } from 'lucide-react';
+import { useAccessibleDialog } from '../hooks/useAccessibleDialog';
 
 interface ShortcutsModalProps {
   onClose: () => void;
@@ -20,9 +21,10 @@ const ROWS: { keys: string; action: string }[] = [
 ];
 
 export function ShortcutsModal({ onClose }: ShortcutsModalProps) {
+  const dialogRef = useAccessibleDialog(onClose);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-md rounded-xl border border-surface-700 bg-surface-900 shadow-2xl">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" className="w-full max-w-md rounded-xl border border-surface-700 bg-surface-900 shadow-2xl">
         <div className="flex items-center justify-between border-b border-surface-700 px-4 py-3">
           <div className="flex items-center gap-2">
             <Keyboard size={16} className="text-accent" />

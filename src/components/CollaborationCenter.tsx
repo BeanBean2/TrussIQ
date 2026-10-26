@@ -14,9 +14,11 @@ import {
   X,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { useAccessibleDialog } from '../hooks/useAccessibleDialog';
 import type { StructureAudit } from '../lib/structureAudit';
-import { serializeTruss } from '../lib/trussIO';
+import { createReviewLink } from '../lib/reviewLink';
 import type { FEAResult, StructureState } from '../lib/types';
+import { readStoredValue, writeStoredValue } from '../lib/storage';
 
 interface CollaborationCenterProps {
   state: StructureState;
@@ -53,29 +55,27 @@ export function CollaborationCenter({
   onClose,
   onApplySnapshot,
 }: CollaborationCenterProps) {
+  const dialogRef = useAccessibleDialog(onClose);
   const [tab, setTab] = useState<'room' | 'comments' | 'history'>('room');
   const [comments, setComments] = useState<Comment[]>(() => readStorage(COMMENTS_KEY, []));
   const [snapshots, setSnapshots] = useState<Snapshot[]>(() => readStorage(SNAPSHOTS_KEY, []));
   const [review, setReview] = useState<Record<string, boolean>>(() => readStorage(REVIEW_KEY, {}));
   const [message, setMessage] = useState('');
   const [anchor, setAnchor] = useState('Whole model');
-  const [copied, setCopied] = useState(false);
-  const [projectName, setProjectName] = useState(() => localStorage.getItem('trussiq-project-name') ?? 'Untitled bridge study');
+  const [copyStatus, setCopyStatus] = useState<'copied' | 'error' | ''>('');
+  const [projectName, setProjectName] = useState(() => readStoredValue('trussiq-project-name') ?? 'Untitled bridge study');
 
-  const shareCode = useMemo(() => {
-    const payload = btoa(encodeURIComponent(serializeTruss(state)));
-    return `${window.location.origin}${window.location.pathname}#review=${payload}`;
-  }, [state]);
+  const shareCode = useMemo(() => createReviewLink(state, window.location), [state]);
   const openComments = comments.filter((comment) => !comment.resolved).length;
   const approved = Object.values(review).filter(Boolean).length;
 
   const persistComments = (next: Comment[]) => {
     setComments(next);
-    localStorage.setItem(COMMENTS_KEY, JSON.stringify(next));
+    writeStoredValue(COMMENTS_KEY, JSON.stringify(next));
   };
   const persistSnapshots = (next: Snapshot[]) => {
     setSnapshots(next);
-    localStorage.setItem(SNAPSHOTS_KEY, JSON.stringify(next));
+    writeStoredValue(SNAPSHOTS_KEY, JSON.stringify(next));
   };
   const addComment = () => {
     if (!message.trim()) return;
@@ -105,9 +105,14 @@ export function CollaborationCenter({
     persistSnapshots(next);
   };
   const copyShareLink = async () => {
-    await navigator.clipboard.writeText(shareCode);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1800);
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard is unavailable.');
+      await navigator.clipboard.writeText(shareCode);
+      setCopyStatus('copied');
+      window.setTimeout(() => setCopyStatus(''), 1800);
+    } catch {
+      setCopyStatus('error');
+    }
   };
   const downloadPacket = () => {
     const packet = {
@@ -125,18 +130,18 @@ export function CollaborationCenter({
     link.href = url;
     link.download = `${projectName.replace(/[^\w-]+/g, '_')}-review-packet.json`;
     link.click();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-fade-in">
-      <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-surface-700 bg-surface-900 shadow-2xl">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Collaboration center" className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-surface-700 bg-surface-900 shadow-2xl">
         <header className="flex items-start justify-between border-b border-surface-700 px-5 py-4">
           <div className="flex items-start gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/15 text-accent"><Users size={18} /></div>
             <div>
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Local collaboration room</p>
-              <input value={projectName} onChange={(event) => { setProjectName(event.target.value); localStorage.setItem('trussiq-project-name', event.target.value); }} className="mt-1 w-full bg-transparent text-lg font-semibold text-surface-100 outline-none" aria-label="Project name" />
+              <input value={projectName} onChange={(event) => { setProjectName(event.target.value); writeStoredValue('trussiq-project-name', event.target.value); }} className="mt-1 w-full bg-transparent text-lg font-semibold text-surface-100 outline-none" aria-label="Project name" />
               <p className="mt-1 text-xs text-surface-400">Review, checkpoint, and share this design from one place.</p>
             </div>
           </div>
@@ -153,10 +158,12 @@ export function CollaborationCenter({
           {tab === 'room' && (
             <div className="grid gap-4 md:grid-cols-2">
               <section className="space-y-3">
-                <PanelTitle icon={<Link2 size={15} />} title="Shareable review link" />
+                <PanelTitle icon={<Link2 size={15} />} title="Shareable design link" />
                 <div className="rounded-xl border border-surface-700 bg-surface-800/60 p-3">
-                  <p className="break-all text-[10px] leading-4 text-surface-400">{shareCode.slice(0, 160)}{shareCode.length > 160 ? '…' : ''}</p>
-                  <button type="button" onClick={copyShareLink} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-surface-950">{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? 'Copied' : 'Copy review link'}</button>
+                  <p className="text-[10px] leading-4 text-surface-400">The link contains this model only. It does not include comments or review checklist marks.</p>
+                  <input readOnly value={shareCode} aria-label="Shareable model link" onFocus={(event) => event.currentTarget.select()} className="mt-2 w-full rounded-md border border-surface-700 bg-surface-900 px-2 py-1.5 font-mono text-[9px] text-surface-400 outline-none focus:border-accent" />
+                  <button type="button" onClick={copyShareLink} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-surface-950">{copyStatus === 'copied' ? <Check size={14} /> : <Copy size={14} />}{copyStatus === 'copied' ? 'Copied' : 'Copy design link'}</button>
+                  {copyStatus === 'error' && <p role="status" className="mt-2 text-[10px] text-warn">Clipboard access failed. Select the link above and copy it manually.</p>}
                 </div>
                 <PanelTitle icon={<ShieldCheck size={15} />} title="Review health" />
                 <div className="grid grid-cols-2 gap-2">
@@ -177,7 +184,7 @@ export function CollaborationCenter({
                   ['tradeoffs', 'Design trade-offs documented'],
                 ].map(([id, label]) => (
                   <label key={id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-surface-700 bg-surface-800/50 px-3 py-3 text-xs text-surface-300">
-                    <input type="checkbox" checked={Boolean(review[id])} onChange={(event) => { const next = { ...review, [id]: event.target.checked }; setReview(next); localStorage.setItem(REVIEW_KEY, JSON.stringify(next)); }} className="accent-teal-500" />
+                    <input type="checkbox" checked={Boolean(review[id])} onChange={(event) => { const next = { ...review, [id]: event.target.checked }; setReview(next); writeStoredValue(REVIEW_KEY, JSON.stringify(next)); }} className="accent-teal-500" />
                     {label}
                   </label>
                 ))}
@@ -252,7 +259,7 @@ function EmptyState({ text }: { text: string }) {
 
 function readStorage<T>(key: string, fallback: T): T {
   try {
-    const value = localStorage.getItem(key);
+    const value = readStoredValue(key);
     return value ? (JSON.parse(value) as T) : fallback;
   } catch {
     return fallback;

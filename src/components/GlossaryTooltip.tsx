@@ -1,7 +1,7 @@
 import { HelpCircle } from 'lucide-react';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
-export const GLOSSARY: Record<string, string> = {
+const GLOSSARY: Record<string, string> = {
   'Young\'s Modulus':
     'E — stiffness of a material. Stress / strain in the elastic range. Higher E → less stretch under the same load (steel ≈ 200 GPa, PLA ≈ 3.5 GPa).',
   'Yield Strength':
@@ -26,6 +26,7 @@ interface GlossaryTooltipProps {
 /** Hover/focus definition chip for engineering vocabulary. */
 export function GlossaryTooltip({ term, className = '' }: GlossaryTooltipProps) {
   const [open, setOpen] = useState(false);
+  const tooltipId = useId();
   const def = GLOSSARY[term] ?? 'Engineering term used in TrussIQ analysis.';
 
   return (
@@ -39,13 +40,17 @@ export function GlossaryTooltip({ term, className = '' }: GlossaryTooltipProps) 
       <span className="border-b border-dotted border-accent/60 text-accent">{term}</span>
       <button
         type="button"
-        className="text-surface-400 hover:text-accent"
+        className="rounded text-surface-400 outline-none hover:text-accent focus-visible:ring-2 focus-visible:ring-accent"
         aria-label={`Define ${term}`}
+        aria-expanded={open}
+        aria-describedby={open ? tooltipId : undefined}
+        onClick={() => setOpen(true)}
+        onKeyDown={(event) => { if (event.key === 'Escape') setOpen(false); }}
       >
         <HelpCircle size={11} />
       </button>
       {open && (
-        <span className="absolute bottom-full left-0 z-30 mb-1 w-64 rounded-lg border border-surface-700 bg-surface-900 p-2.5 text-[11px] leading-relaxed text-surface-300 shadow-xl animate-fade-in">
+        <span id={tooltipId} role="tooltip" className="absolute bottom-full left-0 z-30 mb-1 w-64 rounded-lg border border-surface-700 bg-surface-900 p-2.5 text-[11px] leading-relaxed text-surface-300 shadow-xl animate-fade-in">
           {def}
         </span>
       )}

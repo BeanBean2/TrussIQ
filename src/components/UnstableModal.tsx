@@ -1,4 +1,5 @@
 import { AlertTriangle, X } from 'lucide-react';
+import { useAccessibleDialog } from '../hooks/useAccessibleDialog';
 
 interface UnstableModalProps {
   message: string;
@@ -6,9 +7,10 @@ interface UnstableModalProps {
 }
 
 export function UnstableModal({ message, onClose }: UnstableModalProps) {
+  const dialogRef = useAccessibleDialog(onClose);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-md rounded-xl border border-warn/40 bg-surface-900 shadow-2xl">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Analysis message" className="w-full max-w-md rounded-xl border border-warn/40 bg-surface-900 shadow-2xl">
         <div className="flex items-start gap-3 px-5 py-5">
           <div className="mt-0.5 rounded-lg bg-warn/15 p-2 text-warn">
             <AlertTriangle size={22} />

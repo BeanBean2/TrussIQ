@@ -1,5 +1,6 @@
 import { Calculator, X } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { useAccessibleDialog } from '../hooks/useAccessibleDialog';
 import type { FormulaBreakdown } from '../lib/types';
 
 interface FormulaInspectorProps {
@@ -26,9 +27,10 @@ function Matrix4({ m }: { m: number[][] }) {
 }
 
 export function FormulaInspector({ data, onClose }: FormulaInspectorProps) {
+  const dialogRef = useAccessibleDialog(onClose);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl border border-surface-700 bg-surface-900 shadow-2xl">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Formula inspector" className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl border border-surface-700 bg-surface-900 shadow-2xl">
         <div className="sticky top-0 flex items-center justify-between border-b border-surface-700 bg-surface-900 px-4 py-3">
           <div className="flex items-center gap-2">
             <Calculator size={16} className="text-accent" />

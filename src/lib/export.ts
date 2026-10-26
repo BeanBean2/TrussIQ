@@ -25,11 +25,14 @@ export function exportPDFReport(
   const line = (text: string, size = 10, style: 'normal' | 'bold' = 'normal') => {
     pdf.setFont('helvetica', style);
     pdf.setFontSize(size);
-    pdf.text(text, margin, y);
-    y += size * 0.5 + 2;
-    if (y > 280) {
-      pdf.addPage();
-      y = margin;
+    const lines = pdf.splitTextToSize(text, 210 - margin * 2) as string[];
+    for (const wrappedLine of lines) {
+      if (y + size * 0.6 > 280) {
+        pdf.addPage();
+        y = margin;
+      }
+      pdf.text(wrappedLine, margin, y);
+      y += size * 0.5 + 2;
     }
   };
 
@@ -49,20 +52,20 @@ export function exportPDFReport(
     line(result?.message ?? 'Solver has not been run yet.');
   } else {
     line('Analysis Status', 12, 'bold');
-    line(result.passed ? 'PASSED — Structurally Sound' : 'FAILED — Member Yield / Overstress');
+    line(result.passed ? 'Yield check: Below modeled yield limit' : 'Yield check: Modeled yield limit exceeded');
     line(`Peak |σ|/σ_yield: ${(result.maxSafetyRatio * 100).toFixed(1)}%`);
+    line('Educational linear axial-only yield check. This does not certify overall safety; buckling, joints, bracing, fatigue, and code requirements are not verified.', 8);
     y += 4;
 
     line('Member Results', 12, 'bold');
-    line('ID          Force(N)     Stress(MPa)   Ratio    Status', 8);
+    line('Member ID  Axial force (N)  Stress (MPa)  Yield utilization (%)  Member status', 8);
 
     for (const m of result.members) {
       const short = m.beamId.padEnd(10).slice(0, 10);
       const force = m.axialForce.toFixed(1).padStart(10);
       const stress = m.stress.toFixed(2).padStart(12);
-      const ratio = `${(m.safetyRatio * 100).toFixed(0)}%`.padStart(7);
-      const status = m.status.padStart(10);
-      line(`${short} ${force} ${stress} ${ratio} ${status}`, 8);
+      const ratio = `${(m.safetyRatio * 100).toFixed(0)}%`;
+      line(`${short.trimEnd()} | ${force.trim()} | ${stress.trim()} | ${ratio} | ${m.status}`, 8);
     }
 
     y += 4;
@@ -76,7 +79,7 @@ export function exportPDFReport(
 }
 
 function sanitizeFilename(name: string): string {
-  return name.replace(/[^\w\-]+/g, '_').slice(0, 64) || 'trussiq';
+  return name.replace(/[^\w-]+/g, '_').slice(0, 64) || 'trussiq';
 }
 
 function downloadBlob(blob: Blob, filename: string): void {
@@ -85,5 +88,5 @@ function downloadBlob(blob: Blob, filename: string): void {
   a.href = url;
   a.download = filename;
   a.click();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
