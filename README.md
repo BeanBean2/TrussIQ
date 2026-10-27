@@ -157,7 +157,6 @@ You can also paste a key in the coach panel (stored in browser local storage). P
 
 | Doc | Contents |
 | --- | --- |
-| [VIDEO_SCRIPT.md](VIDEO_SCRIPT.md) | CAC 2026 demo video script (rules checklist + speakable lines) |
 | [DEMO_PACKAGE.md](DEMO_PACKAGE.md) | Live Demo Mode launch + judge feature list |
 | [PRIVACY.md](PRIVACY.md) | Local storage, share links, optional Gemini data flow |
 | [LICENSE](LICENSE) | MIT |
