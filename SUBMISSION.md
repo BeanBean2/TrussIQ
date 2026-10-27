@@ -12,19 +12,20 @@ Use this with the official portal and rulebook. In-app: **Impact** dashboard →
 
 **Audience:** Middle and high school physics, robotics, and intro engineering students and teachers.
 
-## Demo video (~1:55)
+## Demo video (1–3 minutes, aim ~2:00)
 
-Follow the timed storyboard in Impact → “Plan a 1:55 demo video,” or `CAC_VIDEO_STORYBOARD` in `src/lib/challengePrep.ts`.
+**Full speakable script + shot list:** [VIDEO_SCRIPT.md](VIDEO_SCRIPT.md) (aligned to the 2026 CAC rules PDF).
+
+Also see Impact → “Plan a 1:55 demo video,” or `CAC_VIDEO_STORYBOARD` in `src/lib/challengePrep.ts`.
 
 Suggested live path:
 
-1. Open the live demo (or guided demo / Howe preset).
-2. Click **Run FEA**; explain one member force or yield utilization in your own words.
-3. Toggle **Units** (SI ↔ US) or **Palette** (colorblind-safer) on the feature bar; change one section/material or load; re-run; compare.
-4. Open **Impact** → download **Lab worksheet PDF** or **learning portfolio**.
-5. State scope: linear, axial-only learning estimate — not construction certification.
-6. Name stack: TypeScript, React, Vite, Tailwind, Three.js; optional Gemini coach.
-7. Disclose AI assistance truthfully; describe code you personally understand (e.g. Direct Stiffness Method assembly in `feaEngine.ts`).
+1. Open the live demo → **Launch Demo Mode**.
+2. Run analysis; explain tension/compression or peak utilization in your own words.
+3. Reinforce the hottest member; re-run; compare; say it is an educational estimate, not a blueprint.
+4. Name stack: TypeScript, React, Vite, Tailwind, Three.js; solver in the browser.
+5. Disclose AI assistance truthfully in the **written** submission; in the video, describe code you personally understand (e.g. Direct Stiffness Method in `feaEngine.ts`).
+6. Upload to YouTube or Vimeo as **Public**.
 
 ## Application talking points
 

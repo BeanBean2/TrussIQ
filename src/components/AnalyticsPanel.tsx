@@ -1,3 +1,4 @@
+import { nodeLabel, memberLabel } from '../lib/entityLabels';
 import {
   Bar,
   BarChart,
@@ -26,8 +27,8 @@ export function AnalyticsPanel({ nodes, beams, result, materialId }: AnalyticsPa
 
   const forceData =
     result?.success
-      ? result.members.map((m, i) => ({
-          name: `M${i}`,
+      ? result.members.map((m) => ({
+          name: memberLabel(m.beamId, beams),
           force: Number(m.axialForce.toFixed(1)),
           fill: m.axialForce >= 0 ? '#22c55e' : '#38bdf8',
         }))
@@ -35,11 +36,11 @@ export function AnalyticsPanel({ nodes, beams, result, materialId }: AnalyticsPa
 
   const sfData =
     result?.success
-      ? result.members.map((m, i) => {
+      ? result.members.map((m) => {
           const sf = m.safetyRatio > 1e-9 ? 1 / m.safetyRatio : 99;
           const capped = Math.min(sf, 20);
           return {
-            name: `M${i}`,
+            name: memberLabel(m.beamId, beams),
             sf: Number(capped.toFixed(2)),
             fill: m.yielded ? '#ef4444' : m.safetyRatio >= 0.5 ? '#eab308' : '#22c55e',
           };
@@ -78,8 +79,8 @@ export function AnalyticsPanel({ nodes, beams, result, materialId }: AnalyticsPa
               {(result.reactions ?? [])
                 .filter((reaction) => Math.abs(reaction.fx) > 1e-6 || Math.abs(reaction.fy) > 1e-6)
                 .map((reaction) => (
-                  <div key={reaction.nodeId} className="flex items-center justify-between text-surface-400">
-                    <span>{reaction.nodeId}</span>
+                  <div key={nodeLabel(reaction.nodeId)} className="flex items-center justify-between text-surface-400">
+                    <span>{nodeLabel(reaction.nodeId)}</span>
                     <span className="text-surface-200">
                       Rx {reaction.fx.toFixed(1)} N · Ry {reaction.fy.toFixed(1)} N
                     </span>

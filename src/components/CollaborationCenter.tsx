@@ -18,6 +18,7 @@ import { useAccessibleDialog } from '../hooks/useAccessibleDialog';
 import type { StructureAudit } from '../lib/structureAudit';
 import { createReviewLink } from '../lib/reviewLink';
 import { deleteDraftSlot, listDraftSlots, saveDraftSlot, type DraftSlot } from '../lib/draftSlots';
+import { getPrivacyPrefs } from '../lib/privacy';
 import type { FEAResult, StructureState } from '../lib/types';
 import { readStoredValue, writeStoredValue } from '../lib/storage';
 
@@ -64,11 +65,20 @@ export function CollaborationCenter({
   const [message, setMessage] = useState('');
   const [anchor, setAnchor] = useState('Whole model');
   const [copyStatus, setCopyStatus] = useState<'copied' | 'error' | ''>('');
+  const [shareUnlocked, setShareUnlocked] = useState(() => getPrivacyPrefs().allowShareLinks);
+  const [shareError, setShareError] = useState<string | null>(null);
   const [projectName, setProjectName] = useState(() => readStoredValue('trussiq-project-name') ?? 'Untitled bridge study');
   const [draftSlots, setDraftSlots] = useState<DraftSlot[]>(() => listDraftSlots());
   const [slotLabel, setSlotLabel] = useState('Period A');
 
-  const shareCode = useMemo(() => createReviewLink(state, window.location), [state]);
+  const shareCode = useMemo(() => {
+    if (!shareUnlocked) return '';
+    try {
+      return createReviewLink(state, window.location);
+    } catch {
+      return '';
+    }
+  }, [state, shareUnlocked]);
   const openComments = comments.filter((comment) => !comment.resolved).length;
   const approved = Object.values(review).filter(Boolean).length;
 
@@ -107,7 +117,23 @@ export function CollaborationCenter({
     ].slice(0, 12);
     persistSnapshots(next);
   };
+  const unlockShareLink = () => {
+    try {
+      const link = createReviewLink(state, window.location);
+      setShareUnlocked(true);
+      setShareError(null);
+      void link;
+    } catch (error) {
+      setShareError(error instanceof Error ? error.message : 'Could not create a share link.');
+      setShareUnlocked(false);
+    }
+  };
+
   const copyShareLink = async () => {
+    if (!shareUnlocked || !shareCode) {
+      setShareError('Unlock share links first (privacy consent below).');
+      return;
+    }
     try {
       if (!navigator.clipboard?.writeText) throw new Error('Clipboard is unavailable.');
       await navigator.clipboard.writeText(shareCode);
@@ -135,20 +161,36 @@ export function CollaborationCenter({
     }
   };
   const downloadPacket = () => {
+    const includePersonal = getPrivacyPrefs().includePersonalFields;
     const packet = {
-      projectName,
+      projectName: includePersonal ? projectName : 'Classroom design (name omitted)',
       exportedAt: new Date().toISOString(),
+      privacy: {
+        personalFieldsIncluded: includePersonal,
+        note: includePersonal
+          ? 'Personal project name included by Privacy setting.'
+          : 'Project name omitted — enable “Include names on exports” in Privacy to add it.',
+      },
       model: state,
       analysis: result,
       audit,
-      comments,
+      comments: includePersonal
+        ? comments
+        : comments.map(({ id, message, anchor, resolved, createdAt }) => ({
+            id,
+            author: 'Reviewer',
+            message,
+            anchor,
+            resolved,
+            createdAt,
+          })),
       review,
       snapshots: snapshots.map(({ id, label, createdAt }) => ({ id, label, createdAt })),
     };
     const url = URL.createObjectURL(new Blob([JSON.stringify(packet, null, 2)], { type: 'application/json' }));
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${projectName.replace(/[^\w-]+/g, '_')}-review-packet.json`;
+    link.download = `${(includePersonal ? projectName : 'trussiq-review').replace(/[^\w-]+/g, '_')}-review-packet.json`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
@@ -180,9 +222,28 @@ export function CollaborationCenter({
               <section className="space-y-3">
                 <PanelTitle icon={<Link2 size={15} />} title="Shareable design link" />
                 <div className="rounded-xl border border-surface-700 bg-surface-800/60 p-3">
-                  <p className="text-[10px] leading-4 text-surface-400">The link contains this model only. It does not include comments or review checklist marks.</p>
-                  <input readOnly value={shareCode} aria-label="Shareable model link" onFocus={(event) => event.currentTarget.select()} className="mt-2 w-full rounded-md border border-surface-700 bg-surface-900 px-2 py-1.5 font-mono text-[9px] text-surface-400 outline-none focus:border-accent" />
-                  <button type="button" onClick={copyShareLink} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-surface-950">{copyStatus === 'copied' ? <Check size={14} /> : <Copy size={14} />}{copyStatus === 'copied' ? 'Copied' : 'Copy design link'}</button>
+                  <p className="text-[10px] leading-4 text-surface-400">
+                    Privacy default: locked. A share link encodes the full model in the URL (browser history and anyone with the link can open it). Comments are not included.
+                  </p>
+                  {!shareUnlocked ? (
+                    <label className="mt-3 flex cursor-pointer items-start gap-2 text-[10px] leading-4 text-surface-300">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 accent-teal-500"
+                        checked={false}
+                        onChange={(event) => {
+                          if (event.target.checked) unlockShareLink();
+                        }}
+                      />
+                      <span>I understand this link contains the model geometry and loads, and I want to create one for this session.</span>
+                    </label>
+                  ) : (
+                    <>
+                      <input readOnly value={shareCode} aria-label="Shareable model link" onFocus={(event) => event.currentTarget.select()} className="mt-2 w-full rounded-md border border-surface-700 bg-surface-900 px-2 py-1.5 font-mono text-[9px] text-surface-400 outline-none focus:border-accent" />
+                      <button type="button" onClick={copyShareLink} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-surface-950">{copyStatus === 'copied' ? <Check size={14} /> : <Copy size={14} />}{copyStatus === 'copied' ? 'Copied' : 'Copy design link'}</button>
+                    </>
+                  )}
+                  {shareError && <p role="status" className="mt-2 text-[10px] text-warn">{shareError}</p>}
                   {copyStatus === 'error' && <p role="status" className="mt-2 text-[10px] text-warn">Clipboard access failed. Select the link above and copy it manually.</p>}
                 </div>
                 <PanelTitle icon={<ShieldCheck size={15} />} title="Review health" />

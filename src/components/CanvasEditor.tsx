@@ -1,3 +1,7 @@
+import { nodeLabel, memberLabel } from '../lib/entityLabels';
+import { explainFailures } from '../lib/failureExplanation';
+import { getMaterial } from '../lib/materials';
+import type { MaterialView } from '../lib/materialLab';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Maximize2, ZoomIn, ZoomOut } from 'lucide-react';
 import { axialLabelColors, stressColorForPalette, type ResultPalette } from '../lib/resultPalette';
@@ -156,6 +160,7 @@ interface CanvasEditorProps {
   memberFilter?: MemberViewFilter;
   displayUnits?: DisplayUnitSystem;
   resultPalette?: ResultPalette;
+  materialView?: MaterialView;
   canvasRefCallback?: (el: HTMLCanvasElement | null) => void;
   onSelectNode: (id: string | null) => void;
   onSelectBeam: (id: string | null) => void;
@@ -188,6 +193,7 @@ export function CanvasEditor({
   memberFilter = 'all',
   displayUnits = 'si',
   resultPalette = 'default',
+  materialView = 'stress',
   canvasRefCallback,
   onSelectNode,
   onSelectBeam,
@@ -255,6 +261,7 @@ export function CanvasEditor({
     return Math.round(v / step) * step;
   }, [gridSize]);
 
+  const failureMap = useMemo(() => new Map(explainFailures(beams, result).map(f => [f.beamId, f])), [beams, result]);
   const bucklingSet = useMemo(() => new Set(bucklingBeamIds), [bucklingBeamIds]);
   const hlBeamSet = useMemo(() => new Set(highlightBeamIds), [highlightBeamIds]);
   const hlNodeSet = useMemo(() => new Set(highlightNodeIds), [highlightNodeIds]);
@@ -464,9 +471,10 @@ export function CanvasEditor({
         const buckling = bucklingSet.has(b.id);
         const filteredOut = !memberPassesFilter(memberFilter, member);
 
-        let color = '#94a3b8';
-        let width = 3;
-        if (member) {
+        const materialMode = materialView === 'materials';
+        let color = materialMode ? getMaterial(b.materialId).color : '#94a3b8';
+        let width = materialMode ? 4.5 : 3;
+        if (member && !materialMode) {
           color = stressColorForPalette(member.safetyRatio, member.yielded, resultPalette);
           width = member.yielded ? 5 : 3.5;
         }
@@ -481,20 +489,32 @@ export function CanvasEditor({
           ctx.globalAlpha = 1;
         }
 
+        // A slate casing keeps pale aluminum legible against the light grid.
+        if (materialMode && b.materialId === 'al6061' && light) {
+          ctx.save();
+          ctx.strokeStyle = '#475569';
+          ctx.lineWidth = width + 3;
+
+          ctx.lineCap = 'round';
+          ctx.globalAlpha = filteredOut && !selected && !highlighted ? 0.12 : 1;
+          ctx.setLineDash([]);
+          ctx.beginPath();
+          ctx.moveTo(pi.x, pi.y);
+          ctx.lineTo(pj.x, pj.y);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Stress heatmap: green (low) → red (high). Compression stays dashed for axial sense.
         ctx.strokeStyle = color;
         ctx.lineWidth = width;
         ctx.lineCap = 'round';
         ctx.globalAlpha = filteredOut && !selected && !highlighted ? 0.12 : 1;
-        if (member?.status === 'compression') {
+        if (!materialMode && member?.status === 'compression') {
           ctx.setLineDash([6, 4]);
           ctx.lineDashOffset = -dashOffsetRef.current;
         } else {
           ctx.setLineDash([]);
-        }
-        // Blue overlay hint for compression
-        if (member?.status === 'compression' && !filteredOut) {
-          ctx.strokeStyle = '#38bdf8';
-          ctx.globalAlpha = 0.85;
         }
         ctx.beginPath();
         ctx.moveTo(pi.x, pi.y);
@@ -503,24 +523,36 @@ export function CanvasEditor({
         ctx.globalAlpha = 1;
         ctx.setLineDash([]);
 
-        // Tension solid with stress color (redraw if we overwrote with blue)
-        if (member && member.status !== 'compression') {
-          ctx.strokeStyle = color;
-          ctx.lineWidth = width;
+        if (materialMode && !filteredOut) {
+          const dx = pj.x - pi.x, dy = pj.y - pi.y, length = Math.hypot(dx, dy);
+          ctx.save();
+          ctx.translate(pi.x, pi.y); ctx.rotate(Math.atan2(dy, dx));
+          ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.globalAlpha = 0.65;
+          if (b.materialId === 'al6061' || b.materialId === 'titanium') {
+            ctx.beginPath(); ctx.moveTo(0, -2); ctx.lineTo(length, -2); ctx.moveTo(0, 2); ctx.lineTo(length, 2); ctx.stroke();
+          } else if (['wood', 'pla', 'cfiber', 'rope'].includes(b.materialId)) {
+            for (let x = 7; x < length - 5; x += b.materialId === 'wood' ? 15 : 10) {
+              ctx.beginPath();
+              if (b.materialId === 'wood') { ctx.moveTo(x, -2); ctx.lineTo(Math.min(x + 8, length), -2); }
+              else { ctx.moveTo(x - 2, -3); ctx.lineTo(x + 2, 3); if (b.materialId === 'cfiber' || b.materialId === 'rope') { ctx.moveTo(x - 2, 3); ctx.lineTo(x + 2, -3); } }
+              ctx.stroke();
+            }
+          }
+          ctx.restore();
+        }
+
+        // Mark an exceeded limit in either material or stress view.
+        if (failureMap.has(b.id) && !filteredOut) {
+          const mx = (pi.x + pj.x) / 2, my = (pi.y + pj.y) / 2;
+          ctx.save();
+          ctx.setLineDash([]);
+          ctx.strokeStyle = light ? '#b91c1c' : '#f87171';
+          ctx.lineWidth = 3;
           ctx.beginPath();
-          ctx.moveTo(pi.x, pi.y);
-          ctx.lineTo(pj.x, pj.y);
+          ctx.moveTo(mx - 5, my - 5); ctx.lineTo(mx + 5, my + 5);
+          ctx.moveTo(mx + 5, my - 5); ctx.lineTo(mx - 5, my + 5);
           ctx.stroke();
-        } else if (member?.status === 'compression') {
-          // Keep blue dashed as primary; thin stress-color underlay
-          ctx.strokeStyle = color;
-          ctx.lineWidth = 1.5;
-          ctx.globalAlpha = 0.5;
-          ctx.beginPath();
-          ctx.moveTo(pi.x, pi.y);
-          ctx.lineTo(pj.x, pj.y);
-          ctx.stroke();
-          ctx.globalAlpha = 1;
+          ctx.restore();
         }
 
         // Buckling warning badge at midspan
@@ -615,7 +647,9 @@ export function CanvasEditor({
         if (Math.hypot(userFx, userFy) > 1e-6) {
           drawForceArrow(ctx, p.x, p.y, userFx, userFy, {
             color: '#ef4444',
-            alwaysLabel: showForceLabels,
+            alwaysLabel: true,
+            units: displayUnits,
+            bounds: { width: w, height: h },
             tag: 'load',
           });
         }
@@ -624,6 +658,8 @@ export function CanvasEditor({
             color: dynamicsMode === 'wind' ? '#38bdf8' : '#c084fc',
             alwaysLabel: true,
             tag: dynamicsMode === 'wind' ? 'wind' : 'seis',
+            units: displayUnits,
+            bounds: { width: w, height: h },
             minLen: 28,
           });
         }
@@ -639,7 +675,9 @@ export function CanvasEditor({
           drawForceArrow(ctx, p.x, p.y, reaction.fx, reaction.fy, {
             color: '#f59e0b',
             alwaysLabel: true,
-            tag: 'Rx',
+            tag: 'reaction',
+            units: displayUnits,
+            bounds: { width: w, height: h },
             dashed: true,
             minLen: 24,
           });
@@ -668,9 +706,9 @@ export function CanvasEditor({
         ctx.stroke();
 
         // Label
-        ctx.fillStyle = '#94a3b8';
+        ctx.fillStyle = light ? '#475569' : '#94a3b8';
         ctx.font = '10px "IBM Plex Mono", monospace';
-        ctx.fillText(shortId(n.id), p.x + 10, p.y - 10);
+        ctx.fillText(nodeLabel(n.id), p.x + 10, p.y - 10);
       }
 
       // Cursor ghost for node tool
@@ -722,6 +760,7 @@ export function CanvasEditor({
     tool,
     getDisplaced,
     bucklingSet,
+    failureMap,
     hlBeamSet,
     hlNodeSet,
     snap,
@@ -729,6 +768,7 @@ export function CanvasEditor({
     memberFilter,
     displayUnits,
     resultPalette,
+    materialView,
     syncViewScale,
     dynamicsMode,
     userLoadMap,
@@ -817,7 +857,7 @@ export function CanvasEditor({
     if (hitNode) {
       const d = result?.displacements.find((item) => item.nodeId === hitNode.id);
       nextTip =
-        `${shortId(hitNode.id)} · (${hitNode.x.toFixed(0)}, ${hitNode.y.toFixed(0)}) mm · ${hitNode.support}` +
+        `${nodeLabel(hitNode.id)} · (${hitNode.x.toFixed(0)}, ${hitNode.y.toFixed(0)}) mm · ${hitNode.support}` +
         (hitNode.fx || hitNode.fy ? ` · F=(${hitNode.fx}, ${hitNode.fy}) N` : '') +
         (d ? ` · u=(${d.ux.toExponential(2)}, ${d.uy.toExponential(2)}) mm` : '');
     } else if (hitBeam) {
@@ -826,7 +866,7 @@ export function CanvasEditor({
       const nj = nodes.find((n) => n.id === hitBeam.nodeJ);
       const len = ni && nj ? formatMemberLength(Math.hypot(nj.x - ni.x, nj.y - ni.y), activeGridMm, displayUnits) : null;
       nextTip =
-        `${displayEntityId(hitBeam.id, 'M')} · ${shortId(hitBeam.nodeI)}–${shortId(hitBeam.nodeJ)}` +
+        `${memberLabel(hitBeam.id, beams)} · ${nodeLabel(hitBeam.nodeI)}–${nodeLabel(hitBeam.nodeJ)}` +
         (len ? ` · L ${len}` : '') +
         (member
           ? ` · ${member.status} ${formatForceDisplay(member.axialForce, displayUnits)} · σ ${formatStressDisplay(member.stress, displayUnits)} · util ${(member.safetyRatio * 100).toFixed(0)}%`
@@ -1011,11 +1051,11 @@ export function CanvasEditor({
                 <button
                   type="button"
                   aria-pressed={selectedNodeId === node.id}
-                  aria-label={`Select joint ${shortId(node.id)}; x ${node.x} millimeters, y ${node.y} millimeters; support ${node.support}; horizontal load ${node.fx} newtons, vertical load ${node.fy} newtons`}
+                  aria-label={`Select joint ${nodeLabel(node.id)}; x ${node.x} millimeters, y ${node.y} millimeters; support ${node.support}; horizontal load ${node.fx} newtons, vertical load ${node.fy} newtons`}
                   onClick={() => { onSelectNode(node.id); onSelectBeam(null); }}
                   className={`w-full rounded-md px-2 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent ${selectedNodeId === node.id ? 'bg-accent/15 text-accent' : 'text-surface-300 hover:bg-surface-800'}`}
                 >
-                  <span className="font-mono">{displayEntityId(node.id, 'J')}</span><span className="ml-2 text-[10px] text-surface-500">({node.x}, {node.y}) mm</span>
+                  <span className="font-mono">{nodeLabel(node.id)}</span><span className="ml-2 text-[10px] text-surface-500">({node.x}, {node.y}) mm</span>
                   {(node.support !== 'none' || node.fx !== 0 || node.fy !== 0) && <span className="ml-2 text-[10px] text-surface-400">{node.support !== 'none' ? node.support : ''}{node.fx !== 0 || node.fy !== 0 ? ` · Fx ${node.fx}, Fy ${node.fy} N` : ''}</span>}
                 </button>
               </li>
@@ -1036,11 +1076,11 @@ export function CanvasEditor({
                 <button
                   type="button"
                   aria-pressed={selectedBeamId === beam.id}
-                  aria-label={`Select member ${shortId(beam.id)}, between joints ${shortId(beam.nodeI)} and ${shortId(beam.nodeJ)}, length ${length}, ${force}`}
+                  aria-label={`Select member ${memberLabel(beam.id, beams)}, between joints ${nodeLabel(beam.nodeI)} and ${nodeLabel(beam.nodeJ)}, length ${length}, ${force}`}
                   onClick={() => { onSelectBeam(beam.id); onSelectNode(null); }}
                   className={`w-full rounded-md px-2 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent ${selectedBeamId === beam.id ? 'bg-accent/15 text-accent' : 'text-surface-300 hover:bg-surface-800'}`}
                 >
-                  <span className="font-mono">{displayEntityId(beam.id, 'M')}</span><span className="ml-2 text-[10px] text-surface-500">{shortId(beam.nodeI)}–{shortId(beam.nodeJ)}</span><span className="ml-2 text-[10px] text-surface-400">{length}</span><span className="ml-2 text-[10px] text-surface-400">{force}</span>
+                  <span className="font-mono">{memberLabel(beam.id, beams)}</span><span className="ml-2 text-[10px] text-surface-500">{nodeLabel(beam.nodeI)}–{nodeLabel(beam.nodeJ)}</span><span className="ml-2 text-[10px] text-surface-400">{length}</span><span className="ml-2 text-[10px] text-surface-400">{force}</span>
                 </button>
               </li>;
             })}
@@ -1065,6 +1105,31 @@ export function CanvasEditor({
           {cursorWorld ? ` · (${formatCoord(cursorWorld.x)}, ${formatCoord(cursorWorld.y)}) mm` : ''}
           {beamDraftFrom ? ' · click second node' : ''}
         </div>
+        {materialView === 'stress' && result?.success && (
+          <div
+            className="rounded-md border border-surface-700 bg-surface-900/90 px-2.5 py-1.5 text-[10px] text-surface-300 backdrop-blur"
+            aria-label="Member stress color legend"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium text-surface-200">Member stress</span>
+              <span className="text-surface-500">|σ| / limit</span>
+            </div>
+            <div
+              className="mt-1.5 h-2 w-full rounded-full"
+              style={{
+                background:
+                  resultPalette === 'colorblind'
+                    ? 'linear-gradient(90deg, #0369a1, #7c3aed, #a16207, #9a3412)'
+                    : 'linear-gradient(90deg, #22c55e, #eab308, #ef4444)',
+              }}
+            />
+            <div className="mt-1 flex justify-between text-[9px] text-surface-500">
+              <span>{resultPalette === 'colorblind' ? 'Low' : 'Low (green)'}</span>
+              <span>{resultPalette === 'colorblind' ? 'High' : 'High (red)'}</span>
+            </div>
+            <p className="mt-1 text-[9px] text-surface-500">Dashed = compression · solid = tension</p>
+          </div>
+        )}
         {(dynamicsMode !== 'none' || (result?.success && (result.reactions?.some((r) => Math.hypot(r.fx, r.fy) > 1e-3)))) && (
           <div className="flex flex-wrap gap-2 rounded-md border border-surface-700 bg-surface-900/90 px-2.5 py-1.5 text-[10px] text-surface-300 backdrop-blur">
             <span className="inline-flex items-center gap-1"><span className="h-1.5 w-3 rounded-sm bg-red-500" /> Load</span>
@@ -1129,16 +1194,6 @@ function memberPassesFilter(
   if (filter === 'yielded') return member.yielded;
   if (filter === 'zero') return member.status === 'zero';
   return true;
-}
-
-function shortId(id: string): string {
-  const parts = id.split('_');
-  return parts.length >= 2 ? `N${parts[parts.length - 1]}` : id.slice(-4);
-}
-
-function displayEntityId(id: string, prefix: 'J' | 'M'): string {
-  const label = shortId(id);
-  return label.startsWith('N') ? `${prefix}${label.slice(1)}` : `${prefix}${label}`;
 }
 
 function formatGridStep(mm: number): string {
@@ -1345,6 +1400,8 @@ function drawForceArrow(
     tag?: string;
     dashed?: boolean;
     minLen?: number;
+    units?: DisplayUnitSystem;
+    bounds?: { width: number; height: number };
   } = {},
 ) {
   const mag = Math.hypot(fx, fy);
@@ -1380,18 +1437,24 @@ function drawForceArrow(
   ctx.fill();
 
   if (opts.alwaysLabel) {
-    const text = opts.tag
-      ? `${opts.tag} ${mag >= 100 ? mag.toFixed(0) : mag.toFixed(1)} N`
-      : `${mag.toFixed(0)} N`;
-    ctx.font = '9px "IBM Plex Mono", monospace';
+    const magnitude = formatForceDisplay(mag, opts.units ?? 'si');
+    const text = opts.tag ? `${opts.tag} ${magnitude}` : magnitude;
+    ctx.font = '11px "IBM Plex Mono", monospace';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'bottom';
     const tw = ctx.measureText(text).width;
-    const lx = ex + 6;
-    const ly = ey - 4;
-    ctx.fillStyle = 'rgba(15, 22, 32, 0.78)';
-    ctx.fillRect(lx - 2, ly - 11, tw + 4, 13);
-    ctx.fillStyle = color;
+    const isReaction = opts.tag === 'reaction';
+    const desiredX = isReaction ? ex - tw - 8 : ex + 8;
+    const desiredY = isReaction ? ey + 20 : ey - 5;
+    const lx = opts.bounds ? Math.max(5, Math.min(opts.bounds.width - tw - 5, desiredX)) : desiredX;
+    const ly = opts.bounds ? Math.max(18, Math.min(opts.bounds.height - 5, desiredY)) : desiredY;
+    const light = document.documentElement.getAttribute('data-theme') === 'light';
+    ctx.fillStyle = light ? 'rgba(255, 255, 255, 0.96)' : 'rgba(15, 22, 32, 0.94)';
+    ctx.fillRect(lx - 4, ly - 14, tw + 8, 18);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 0.8;
+    ctx.strokeRect(lx - 4, ly - 14, tw + 8, 18);
+    ctx.fillStyle = light && opts.tag === 'reaction' ? '#92400e' : light && opts.tag === 'wind' ? '#0369a1' : color;
     ctx.fillText(text, lx, ly);
   }
   ctx.restore();

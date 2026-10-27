@@ -1,62 +1,36 @@
 import { FlaskConical, X } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useAccessibleDialog } from '../hooks/useAccessibleDialog';
 import { solveTruss } from '../lib/feaEngine';
-import { computeMassCost } from '../lib/massCost';
 import { MATERIALS } from '../lib/materials';
-import type { Beam, FEAResult, Material, Node } from '../lib/types';
-
-interface Candidate {
-  material: Material;
-  result: FEAResult;
-  massKg: number;
-  cost: number;
-  maxDeflection: number;
-}
+import { comparisonBeams, materialProfile, materialSnapshot, percentChange, type ComparisonBasis } from '../lib/materialLab';
+import type { Beam, Node } from '../lib/types';
 
 export function MaterialStudy({ nodes, beams, currentMaterialId, onApply, onClose }: {
-  nodes: Node[];
-  beams: Beam[];
-  currentMaterialId: string;
-  onApply: (materialId: string) => void;
-  onClose: () => void;
+  nodes: Node[]; beams: Beam[]; currentMaterialId: string;
+  onApply: (materialId: string, beams: Beam[]) => void; onClose: () => void;
 }) {
   const dialogRef = useAccessibleDialog(onClose);
-  const candidates = useMemo<Candidate[]>(() => MATERIALS.map((material) => {
-    const candidateBeams = beams.map((beam) => ({ ...beam, materialId: material.id }));
+  const [basis, setBasis] = useState<ComparisonBasis>('dimensions');
+  const baseline = useMemo(() => materialSnapshot(nodes, beams, solveTruss(nodes, beams)), [nodes, beams]);
+  const candidates = useMemo(() => MATERIALS.map(material => {
+    const candidateBeams = comparisonBeams(nodes, beams, material.id, basis);
     const result = solveTruss(nodes, candidateBeams);
-    const massCost = computeMassCost(nodes, candidateBeams);
-    return {
-      material,
-      result,
-      massKg: massCost.totalMassG / 1000,
-      cost: massCost.estimatedCostUSD,
-      maxDeflection: result.success ? Math.max(0, ...result.displacements.map((d) => Math.hypot(d.ux, d.uy))) : 0,
-    };
-  }), [nodes, beams]);
-
-  const viable = candidates.filter((item) => item.result.success && item.result.passed);
-  const lightest = viable.reduce<Candidate | null>((best, item) => !best || item.massKg < best.massKg ? item : best, null);
-  const cheapest = viable.reduce<Candidate | null>((best, item) => !best || item.cost < best.cost ? item : best, null);
-
-  return (
-    <div className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-black/70 p-3 pt-[5vh] backdrop-blur-sm">
-      <section ref={dialogRef} role="dialog" aria-modal="true" aria-label="Material study" className="w-full max-w-5xl overflow-hidden rounded-2xl border border-accent/30 bg-surface-900 shadow-2xl">
-        <header className="flex items-start justify-between border-b border-surface-700 px-5 py-4"><div className="flex gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/15 text-accent"><FlaskConical size={18} /></span><div><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-accent">Engineering study</p><h2 className="mt-1 text-lg font-semibold text-surface-100">Compare materials</h2><p className="mt-1 text-xs text-surface-400">Replace every member with each library material, then compare strength, stiffness, weight, and estimated cost.</p></div></div><button type="button" onClick={onClose} aria-label="Close material study" className="rounded-lg p-2 text-surface-400 hover:bg-surface-800"><X size={17} /></button></header>
-        <p className="border-b border-warn/20 bg-warn/5 px-5 py-2.5 text-[10px] leading-4 text-surface-400">Candidates are ranked by the modeled yield limit only. Buckling estimates, joints, bracing, fatigue, and building-code requirements are not certified here.</p>
-        <div className="grid gap-2 border-b border-surface-700 bg-surface-800/30 p-4 sm:grid-cols-2"><Summary label="Lightest below-yield option" candidate={lightest} metric={(candidate) => `${candidate.massKg.toFixed(3)} kg · ${candidate.material.name}`} /><Summary label="Lowest-cost below-yield option" candidate={cheapest} metric={(candidate) => `$${candidate.cost.toFixed(2)} · ${candidate.material.name}`} /></div>
-        <div className="overflow-x-auto p-4"><table className="w-full min-w-[780px] text-left text-[10px]"><thead className="text-surface-500"><tr><th className="px-2 py-2">Material</th><th className="px-2 py-2">E (GPa)</th><th className="px-2 py-2">Yield (MPa)</th><th className="px-2 py-2">Mass (kg)</th><th className="px-2 py-2">Est. cost</th><th className="px-2 py-2">Yield SF</th><th className="px-2 py-2">Deflection</th><th className="px-2 py-2">Yield result</th><th /></tr></thead><tbody>{candidates.map((candidate) => {
-          const result = candidate.result;
-          const safety = result.success ? (result.maxSafetyRatio > 0 ? 1 / result.maxSafetyRatio : Infinity) : 0;
-          const isCurrent = candidate.material.id === currentMaterialId;
-          return <tr key={candidate.material.id} className={`border-t border-surface-800 ${isCurrent ? 'bg-accent/5' : ''}`}><td className="px-2 py-2.5"><span className="font-medium text-surface-200">{candidate.material.name}</span>{isCurrent && <span className="ml-1 text-accent">Current</span>}</td><td className="px-2 py-2.5 font-mono text-surface-300">{candidate.material.E}</td><td className="px-2 py-2.5 font-mono text-surface-300">{candidate.material.sigmaYield}</td><td className="px-2 py-2.5 font-mono text-surface-300">{candidate.massKg.toFixed(3)}</td><td className="px-2 py-2.5 font-mono text-surface-300">${candidate.cost.toFixed(2)}</td><td className="px-2 py-2.5 font-mono text-surface-300">{result.success ? Number.isFinite(safety) ? `${safety.toFixed(2)}×` : '∞' : '—'}</td><td className="px-2 py-2.5 font-mono text-surface-300">{result.success ? `${candidate.maxDeflection.toFixed(3)} mm` : '—'}</td><td className={`px-2 py-2.5 ${!result.success ? 'text-warn' : result.passed ? 'text-pass' : 'text-fail'}`}>{!result.success ? 'No solution' : result.passed ? 'Below yield' : 'Yield exceeded'}</td><td className="px-2 py-2.5">{!isCurrent && <button type="button" disabled={!result.success} onClick={() => { onApply(candidate.material.id); onClose(); }} className="rounded border border-surface-700 px-2 py-1 text-[10px] text-surface-300 hover:border-accent/40 hover:text-accent disabled:opacity-40">Apply</button>}</td></tr>;
-        })}</tbody></table></div>
-        <footer className="border-t border-surface-700 px-5 py-3 text-[10px] text-surface-500">Uniform material substitution keeps geometry and section areas fixed. Cost and material values are classroom estimates; confirm real-world properties before any physical build.</footer>
-      </section>
-    </div>
-  );
+    const snapshot = materialSnapshot(nodes, candidateBeams, result);
+    return { material, beams: candidateBeams, result, snapshot };
+  }), [nodes, beams, basis]);
+  const viable = candidates.filter(c => c.result.success && !c.snapshot.failures);
+  const lightest = [...viable].sort((a, b) => a.snapshot.mass - b.snapshot.mass)[0];
+  const cheapest = [...viable].sort((a, b) => a.snapshot.cost - b.snapshot.cost)[0];
+  const uniform = beams.length > 0 && beams.every(b => b.materialId === currentMaterialId);
+  return <div className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-black/70 p-3 pt-[5vh] backdrop-blur-sm">
+    <section ref={dialogRef} role="dialog" aria-modal="true" aria-label="Material study" className="w-full max-w-6xl rounded-2xl border border-accent/30 bg-surface-900 text-surface-100 shadow-2xl">
+      <header className="flex items-start justify-between gap-4 border-b border-surface-700 p-5"><div><p className="flex items-center gap-2 text-xs text-accent"><FlaskConical size={18} /> MATERIAL LAB</p><h2 className="mt-2 text-xl font-semibold">Compare engineering tradeoffs</h2><p className="mt-1 text-xs text-surface-400">Compare uniform material alternatives against your current {uniform ? 'design' : 'mixed-material design'}. Apply replaces all existing members and updates the new-member material.</p></div><button type="button" onClick={onClose} aria-label="Close material study" className="rounded p-2 hover:bg-surface-800"><X size={18} /></button></header>
+      <div className="space-y-3 border-b border-surface-700 p-5"><label className="flex flex-wrap items-center gap-3 text-xs"><span>Fair comparison basis</span><select aria-label="Comparison basis" value={basis} onChange={e => setBasis(e.target.value as ComparisonBasis)} className="rounded-lg border border-surface-700 bg-surface-800 p-2"><option value="dimensions">Equal dimensions</option><option value="mass">Equal total mass</option><option value="budget">Equal material budget</option></select></label><p className="text-xs leading-5 text-surface-400">{basis === 'dimensions' ? 'Keep every member’s section and area unchanged. Isolate the effect of material choice.' : `Scale each member’s section dimensions proportionally to match the current design’s total ${basis === 'mass' ? 'mass' : 'estimated material cost'}. Topology and external loads stay fixed. Applying also changes section sizes.`} Mass excludes fittings; cost excludes fabrication. Self-weight is not added automatically.</p>
+      <div className="grid gap-3 sm:grid-cols-3"><Summary label="Current design" value={`${(baseline.mass / 1000).toFixed(3)} kg · ${baseline.cost.toFixed(2)}`} /><Summary label={basis === 'mass' ? 'Mass held equal across alternatives' : 'Lightest passing modeled screens'} value={basis === 'mass' ? `${(baseline.mass / 1000).toFixed(3)} kg` : lightest ? `${lightest.material.name} · ${(lightest.snapshot.mass / 1000).toFixed(3)} kg` : 'No passing option'} /><Summary label={basis === 'budget' ? 'Material budget held equal' : 'Lowest cost passing modeled screens'} value={basis === 'budget' ? `${baseline.cost.toFixed(2)}` : cheapest ? `${cheapest.material.name} · ${cheapest.snapshot.cost.toFixed(2)}` : 'No passing option'} /></div></div>
+      <div className="overflow-x-auto p-4"><table className="w-full min-w-[900px] text-left text-xs"><thead className="text-[10px] text-surface-400"><tr>{['Material / behavior', 'Axial E', 'Limits T / C', 'Mass / change', 'Cost / change', 'Deflection / change', 'Modeled checks', ''].map((h,i) => <th key={i} scope="col" className="p-2">{h}</th>)}</tr></thead><tbody>{candidates.map(c => <tr key={c.material.id} className="border-t border-surface-700"><th scope="row" className="max-w-64 p-2 font-normal"><div className="flex items-center gap-2"><span className="h-2 w-5 rounded" style={{ background: c.material.color }} /><strong>{c.material.name}</strong>{uniform && c.material.id === currentMaterialId && <span className="text-[10px] text-accent">Current material</span>}</div><p className="mt-1 text-[10px] leading-4 text-surface-400">{materialProfile(c.material.id).tradeoff}</p></th><td className="p-2 font-mono">{c.material.E} GPa</td><td className="p-2 font-mono">{materialProfile(c.material.id).tension} / {materialProfile(c.material.id).compression} MPa</td><td className="p-2 font-mono">{(c.snapshot.mass / 1000).toFixed(3)} kg<small className="block text-surface-400">{percentChange(baseline.mass, c.snapshot.mass)}</small></td><td className="p-2 font-mono">${c.snapshot.cost.toFixed(2)}<small className="block text-surface-400">{percentChange(baseline.cost, c.snapshot.cost)}</small></td><td className="p-2 font-mono">{c.snapshot.deflection === null ? '—' : `${c.snapshot.deflection.toFixed(3)} mm`}<small className="block text-surface-400">{percentChange(baseline.deflection, c.snapshot.deflection)}</small></td><td className={`p-2 ${!c.result.success || c.snapshot.failures ? 'text-warn' : 'text-pass'}`}>{!c.result.success ? 'No stable solution' : c.snapshot.failures ? `${c.snapshot.failures} flagged members` : 'Below limits'}<small className="block text-[10px] text-surface-400">Strength + Euler buckling</small></td><td className="p-2"><button type="button" aria-label={`Apply ${c.material.name} using ${basis} basis`} disabled={!c.result.success || !beams.length} onClick={() => { onApply(c.material.id, c.beams); onClose(); }} className="rounded border border-accent/40 px-3 py-2 text-accent disabled:opacity-40">Apply</button></td></tr>)}</tbody></table></div>
+      <footer className="space-y-2 border-t border-surface-700 p-5 text-[10px] leading-5 text-surface-400"><p>In a statically determinate truss, changing material can leave axial forces unchanged. Deflection, mass, strength limits, and buckling reveal the tradeoffs. These are linear axial models and illustrative classroom material values, not product specifications.</p><p>Wood assumes along-grain loading; carbon fiber assumes an equivalent axial laminate. Rope carrying compression is flagged as an invalid cable model. Euler buckling assumes pin ends (K = 1), weakest section axis, and a circular rod for unspecified sections. Joints, fabrication, creep, fatigue, and certification are excluded.</p></footer>
+    </section>
+  </div>;
 }
-
-function Summary({ label, candidate, metric }: { label: string; candidate: Candidate | null; metric: (candidate: Candidate) => string }) {
-  return <div className="rounded-xl border border-surface-700 bg-surface-900/70 p-3"><p className="text-[9px] uppercase tracking-wide text-surface-500">{label}</p><p className="mt-1 text-sm font-semibold text-surface-100">{candidate ? metric(candidate) : 'No material is below the current yield limit'}</p></div>;
-}
+function Summary({ label, value }: { label: string; value: string }) { return <div className="rounded-lg border border-surface-700 bg-surface-800/40 p-3"><p className="text-[10px] text-surface-400">{label}</p><p className="mt-1 text-sm font-semibold">{value}</p></div>; }

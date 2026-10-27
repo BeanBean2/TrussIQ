@@ -1,3 +1,4 @@
+import { materialSnapshot, type MaterialChange, type MaterialView } from '../lib/materialLab';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { BookOpen, MousePointer2, Play, X } from 'lucide-react';
@@ -19,13 +20,15 @@ import { DEFAULT_AREA, DEFAULT_MATERIAL_ID } from '../lib/materials';
 import { PRESET_LOADERS, type PresetKey } from '../lib/presets';
 import {
   exportTrussFile,
+  formatImportError,
   loadLocalDraft,
-  parseTrussFile,
   saveLocalDraft,
   serializeTruss,
+  tryParseTrussFile,
 } from '../lib/trussIO';
+import { getActiveProjectName, setActiveProjectName } from '../lib/projectLibrary';
 import { auditStructure } from '../lib/structureAudit';
-import { readStoredValue, writeStoredValue } from '../lib/storage';
+import { readStoredValue, removeStoredValue, writeStoredValue } from '../lib/storage';
 import type {
   Beam,
   DynamicsMode,
@@ -42,6 +45,14 @@ import type {
 } from '../lib/types';
 import { CanvasEditor } from './CanvasEditor';
 import { DemoMode } from './DemoMode';
+import { DemoPresenter } from './DemoPresenter';
+import { GuidedLessonMode } from './GuidedLessonMode';
+import { createLessonGeometryOnly } from '../lib/guidedLesson';
+import {
+  applyDemoDesignChange,
+  createDemoStructure,
+  type DemoDesignChangeResult,
+} from '../lib/demoMode';
 import { MissionMode } from './MissionMode';
 import { CollaborationCenter } from './CollaborationCenter';
 import { CommandPalette } from './CommandPalette';
@@ -55,7 +66,15 @@ import { Toolbar } from './Toolbar';
 import { TopBar } from './TopBar';
 import { TutorialOverlay } from './TutorialOverlay';
 import { UnstableModal } from './UnstableModal';
+import {
+  alertForExportMessage,
+  alertForImportMessage,
+  alertForSolverMessage,
+  type StudentAlert,
+} from '../lib/studentMessages';
 import { TemplateLibrary } from './TemplateLibrary';
+import { ProjectLibrary } from './ProjectLibrary';
+import { ProjectSummaryPanel } from './ProjectSummaryPanel';
 import { ChallengeLibrary } from './ChallengeLibrary';
 import type { EngineeringChallenge } from '../lib/challenges';
 import { LoadCaseStudy } from './LoadCaseStudy';
@@ -63,14 +82,17 @@ import { MaterialStudy } from './MaterialStudy';
 import { GeometryTools } from './GeometryTools';
 import { ARPreviewBoundary } from './ARPreviewBoundary';
 import { ChallengeMode } from './ChallengeMode';
-import { DemoHelper } from './DemoHelper';
+import { ActiveChallengePanel } from './ScaffoldedChallengeHub';
 import { ResizeDivider } from './ResizeDivider';
-import { HIGH_WIND_PROFILE, type BridgeChallengeId } from '../lib/bridgeChallenges';
+import { HIGH_WIND_PROFILE } from '../lib/bridgeChallenges';
+import { getScaffoldedChallenge } from '../lib/scaffoldedChallenges';
 import { computeStructureMetrics, type MemberViewFilter } from '../lib/structureMetrics';
 import { readResultPalette } from '../lib/resultPalette';
 import { readDisplayUnits } from '../lib/units';
 import { exportLabWorksheet } from '../lib/worksheet';
 import { FeatureBar } from './FeatureBar';
+import { PrivacyPanel } from './PrivacyPanel';
+import { getPrivacyPrefs, type PrivacyPrefs } from '../lib/privacy';
 
 const ARViewer = lazy(() =>
   import('./ARViewer').then((m) => ({ default: m.ARViewer })),
@@ -107,13 +129,15 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
   const [highlightBeamIds, setHighlightBeamIds] = useState<string[]>([]);
   const [highlightNodeIds, setHighlightNodeIds] = useState<string[]>([]);
 
+  const [materialView, setMaterialView] = useState<MaterialView>('stress');
+  const [materialChange, setMaterialChange] = useState<MaterialChange | null>(null);
   const [result, setResult] = useState<FEAResult | null>(null);
   const [showDeflection, setShowDeflection] = useState(false);
   const [deflectionScale, setDeflectionScale] = useState(80);
   const [solving, setSolving] = useState(false);
 
   const [forceTarget, setForceTarget] = useState<Node | null>(null);
-  const [unstableMsg, setUnstableMsg] = useState<string | null>(null);
+  const [appAlert, setAppAlert] = useState<StudentAlert | null>(null);
   const [formula, setFormula] = useState<FormulaBreakdown | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialFirstRun, setTutorialFirstRun] = useState(false);
@@ -123,6 +147,12 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
   const [show3DEditor, setShow3DEditor] = useState(false);
   const [showCompare, setShowCompare] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
+  const [demoActive, setDemoActive] = useState(false);
+  const [demoStepIndex, setDemoStepIndex] = useState(0);
+  const [demoBaselineUtil, setDemoBaselineUtil] = useState<number | null>(null);
+  const [demoDesignChange, setDemoDesignChange] = useState<DemoDesignChangeResult | null>(null);
+  const [showGuidedLesson, setShowGuidedLesson] = useState(false);
+  const [guidedLessonStep, setGuidedLessonStep] = useState(0);
   const [presentationMode, setPresentationMode] = useState(false);
   const [showMission, setShowMission] = useState(false);
   const [showCollaboration, setShowCollaboration] = useState(false);
@@ -130,12 +160,21 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
   const [showBrief, setShowBrief] = useState(false);
   const [showImpact, setShowImpact] = useState(false);
   const [showTemplateLibrary, setShowTemplateLibrary] = useState(false);
+  const [showProjectLibrary, setShowProjectLibrary] = useState(false);
+  const [showProjectSummary, setShowProjectSummary] = useState(false);
+  const [projectName, setProjectName] = useState(getActiveProjectName);
   const [showChallengeLibrary, setShowChallengeLibrary] = useState(false);
   const [showLoadCaseStudy, setShowLoadCaseStudy] = useState(false);
   const [showMaterialStudy, setShowMaterialStudy] = useState(false);
   const [showGeometryTools, setShowGeometryTools] = useState(false);
   const [activeChallenge, setActiveChallenge] = useState<EngineeringChallenge | null>(null);
-  const [activeBridgeChallengeId, setActiveBridgeChallengeId] = useState<BridgeChallengeId | null>(null);
+  const [activeScaffoldedChallengeId, setActiveScaffoldedChallengeId] = useState<string | null>(null);
+  const [showScaffoldedHub, setShowScaffoldedHub] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
+  const [privacyPrefs, setPrivacyPrefsState] = useState<PrivacyPrefs>(() => getPrivacyPrefs());
+  const activeScaffoldedChallenge = activeScaffoldedChallengeId
+    ? getScaffoldedChallenge(activeScaffoldedChallengeId) ?? null
+    : null;
   const [draftStatus, setDraftStatus] = useState('Preparing workspace');
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const [soundsEnabled, setSoundsEnabled] = useState(() => readStoredValue('trussiq-ui-sounds') !== '0');
@@ -198,6 +237,7 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
   const bootstrapped = useRef(false);
   const skipInitialAutosave = useRef(false);
   const sharedReviewSession = useRef(false);
+  const demoSessionRef = useRef(false);
   const solveGenRef = useRef(0);
   const autoSolveRef = useRef(autoSolve);
   autoSolveRef.current = autoSolve;
@@ -264,11 +304,36 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
     bootstrapped.current = true;
     skipInitialAutosave.current = true;
     sharedReviewSession.current = Boolean(initialSharedState);
-    const draft = loadLocalDraft();
+    if (initialDemo) {
+      // Fresh Demo Mode: ignore drafts so a blank browser still gets the polished model.
+      demoSessionRef.current = true;
+      replace(createDemoStructure());
+      setDemoActive(true);
+      setDemoStepIndex(0);
+      setDemoBaselineUtil(null);
+      setDemoDesignChange(null);
+      setResult(null);
+      setShowDeflection(false);
+      setDynamicsMode('none');
+      setShowTutorial(false);
+      setShowGuide(false);
+      setDraftStatus('Demo Mode · local draft preserved');
+      return;
+    }
+    const privateSession = getPrivacyPrefs().privateSession;
+    const draft = privateSession ? null : loadLocalDraft();
     replace(draft ?? PRESET_LOADERS.howe.create());
     if (initialSharedState) replace(initialSharedState);
-    setDraftStatus(initialSharedState ? 'Shared model opened · Undo restores your previous design' : draft ? 'Restored local draft' : 'Ready to edit');
-  }, [initialSharedState, replace]);
+    setDraftStatus(
+      initialSharedState
+        ? 'Shared model opened · Undo restores your previous design'
+        : privateSession
+          ? 'Private session · models are not autosaved'
+          : draft
+            ? 'Restored local draft'
+            : 'Ready to edit',
+    );
+  }, [initialDemo, initialSharedState, replace]);
 
   useEffect(() => {
     if (!bootstrapped.current) return;
@@ -280,13 +345,17 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
       setDraftStatus('Shared review · local draft preserved · Save Draft to keep changes');
       return;
     }
+    if (demoSessionRef.current) {
+      setDraftStatus('Demo Mode · local draft preserved');
+      return;
+    }
+    if (privacyPrefs.privateSession) {
+      setDraftStatus('Private session · not saved to this browser');
+      return;
+    }
     const saved = saveLocalDraft(state);
     setDraftStatus(saved ? 'Saved locally' : 'Autosave unavailable — export a backup');
-  }, [state]);
-
-  useEffect(() => {
-    if (initialDemo) setShowDemo(true);
-  }, [initialDemo]);
+  }, [state, privacyPrefs.privateSession]);
 
   // First workspace visit: walk the user through the core tools and FEA workflow.
   useEffect(() => {
@@ -362,14 +431,18 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
     if (audit.errors > 0) {
       if (!opts?.quiet) {
         const first = audit.issues.find((issue) => issue.severity === 'error');
-        setUnstableMsg(`Fix the model audit errors before running FEA. ${first?.title ?? ''} ${first?.message ?? ''}`.trim());
+        setAppAlert(
+          alertForSolverMessage(
+            `Fix the model issues before running analysis. ${first?.title ?? ''} ${first?.message ?? ''}`.trim(),
+          ),
+        );
       }
       return;
     }
     if (nodes.length < 2 || beams.length < 1) {
       if (!opts?.quiet) {
-        setUnstableMsg(
-          'Add at least two nodes and one beam before running the FEA solver.',
+        setAppAlert(
+          alertForSolverMessage('Add at least two joints and one member before running analysis.'),
         );
       }
       return;
@@ -394,6 +467,9 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
           setShowGuide(false);
           writeStoredValue('trussiq-guide-dismissed', '1');
         }
+        if (res.success) {
+          setMaterialView('stress');
+        }
         if (opts?.quiet) return;
         if (res.success) {
           playUiSound('solve', soundsEnabled);
@@ -401,27 +477,26 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
             playUiSound('pass', soundsEnabled);
             showToast(
               loadScalePct === 100
-                ? 'Analysis solved; modeled members are below yield.'
-                : `Solved at ${loadScalePct}% load; members below yield.`,
+                ? 'Analysis solved; modeled members are below their material strength limits.'
+                : `Solved at ${loadScalePct}% load; members below material strength limits.`,
             );
           } else {
             showToast(
               loadScalePct === 100
-                ? 'Analysis solved; one or more members exceed modeled yield.'
-                : `Solved at ${loadScalePct}% load; yield exceeded.`,
+                ? 'Analysis solved; one or more members exceed a modeled material strength limit.'
+                : `Solved at ${loadScalePct}% load; material strength limit exceeded.`,
             );
           }
-        } else if (res.unstable) {
-          setUnstableMsg(
-            res.message ??
-              'Unstable Structure: Add more supports to prevent rigid body motion.',
+        } else if (res.unstable || (!res.success && res.message)) {
+          setAppAlert(
+            alertForSolverMessage(
+              res.message ?? 'Add supports so the whole model cannot slide or spin.',
+            ),
           );
-        } else if (!res.success && res.message) {
-          setUnstableMsg(res.message);
         }
       } catch {
         if (gen === solveGenRef.current) {
-          setUnstableMsg('Solver failed unexpectedly. Check the model and try again.');
+          setAppAlert(alertForSolverMessage('Analysis failed unexpectedly. Check the model and try again.'));
         }
       } finally {
         if (gen === solveGenRef.current) setSolving(false);
@@ -463,6 +538,11 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
         sharedReviewSession.current = false;
+        if (privacyPrefs.privateSession) {
+          setDraftStatus('Private session · export a .truss file to keep a copy');
+          showToast('Private session is on — use Export instead of browser save.');
+          return;
+        }
         setDraftStatus(saveLocalDraft(state) ? 'Saved locally' : 'Save failed — export a backup');
         return;
       }
@@ -511,7 +591,7 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
         setSelectedNodeId(null);
         setSelectedBeamId(null);
         setForceTarget(null);
-        setUnstableMsg(null);
+        setAppAlert(null);
         setFormula(null);
         if (showTutorial) closeTutorial();
         setShowShortcuts(false);
@@ -526,11 +606,23 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
         setShowCollaboration(false);
         setShowCommandPalette(false);
         setShowBrief(false);
+        setShowPrivacy(false);
         setShowImpact(false);
         setShowDemo(false);
+        if (demoSessionRef.current) {
+          demoSessionRef.current = false;
+          setDemoActive(false);
+          setDemoStepIndex(0);
+          setDemoBaselineUtil(null);
+          setDemoDesignChange(null);
+        }
+        setShowGuidedLesson(false);
         setShowChallengeLibrary(false);
+        setShowScaffoldedHub(false);
         setShowGeometryTools(false);
         setShowTemplateLibrary(false);
+        setShowProjectLibrary(false);
+        setShowProjectSummary(false);
         setShowLoadCaseStudy(false);
         setShowMaterialStudy(false);
       }
@@ -580,7 +672,7 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedNodeId, selectedBeamId, commit, undo, redo, invalidate, runSolver, state, showCollapse, gridSize, showTutorial, closeTutorial]);
+  }, [selectedNodeId, selectedBeamId, commit, undo, redo, invalidate, runSolver, state, showCollapse, gridSize, showTutorial, closeTutorial, privacyPrefs.privateSession, showToast]);
 
   const loadPreset = (key: PresetKey) => {
     replace(PRESET_LOADERS[key].create());
@@ -590,8 +682,9 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
     invalidate();
   };
 
-  const launchDemo = () => {
-    const demo = PRESET_LOADERS.warren.create();
+  const beginDemoSession = useCallback(() => {
+    demoSessionRef.current = true;
+    const demo = createDemoStructure();
     replace(demo);
     setDynamicsMode('none');
     setTool('select');
@@ -601,8 +694,71 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
     setHighlightBeamIds([]);
     setHighlightNodeIds([]);
     setShowDemo(false);
-    setShowDeflection(true);
-    setResult(solveTruss(demo.nodes, demo.beams));
+    setShowGuidedLesson(false);
+    setShowTutorial(false);
+    setShowGuide(false);
+    setShowDeflection(false);
+    setShowScaffoldedHub(false);
+    setActiveScaffoldedChallengeId(null);
+    setActiveChallenge(null);
+    setResult(null);
+    setResultStale(false);
+    setDemoStepIndex(0);
+    setDemoBaselineUtil(null);
+    setDemoDesignChange(null);
+    setDemoActive(true);
+    setDraftStatus('Demo Mode · local draft preserved');
+    showToast('Demo Mode loaded — follow the coach, then use Reset Demo anytime.');
+  }, [replace, showToast]);
+
+  const launchDemo = () => {
+    beginDemoSession();
+  };
+
+  const resetDemo = () => {
+    beginDemoSession();
+  };
+
+  const exitDemoMode = () => {
+    demoSessionRef.current = false;
+    setDemoActive(false);
+    setDemoStepIndex(0);
+    setDemoBaselineUtil(null);
+    setDemoDesignChange(null);
+    setHighlightBeamIds([]);
+    setDraftStatus('Demo Mode ended · Save Draft to keep canvas changes');
+  };
+
+  const startGuidedLesson = (opts?: { restart?: boolean }) => {
+    const restart = opts?.restart === true;
+    const hasModel = nodes.length > 0 || beams.length > 0;
+    if (hasModel) {
+      const ok = window.confirm(
+        restart
+          ? 'Restart the guided lesson? This replaces the canvas with the lesson mini-truss geometry.'
+          : 'Start Guided Lesson Mode? This loads a scaffolded mini-truss for Step 1 (your current model will be replaced — use Undo if needed).',
+      );
+      if (!ok) return;
+    }
+    const lesson = createLessonGeometryOnly();
+    replace(lesson);
+    setDynamicsMode('none');
+    setTool('select');
+    setSelectedNodeId(null);
+    setSelectedBeamId(null);
+    setBeamDraftFrom(null);
+    setHighlightBeamIds([]);
+    setHighlightNodeIds([]);
+    setResult(null);
+    setShowDeflection(false);
+    setGuidedLessonStep(0);
+    setShowGuidedLesson(true);
+    setShowDemo(false);
+    setShowTutorial(false);
+    setActiveScaffoldedChallengeId(null);
+    setShowScaffoldedHub(false);
+    exitDemoMode();
+    showToast(restart ? 'Lesson restarted at Step 1.' : 'Guided Lesson Mode started — Step 1: build.');
   };
 
   const clearAll = () => {
@@ -693,24 +849,41 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
     }
   };
 
+  const updateNodeAndAnalyze = (id: string, patch: Partial<Node>) => {
+    const nextNodes = nodes.map(n => n.id === id ? { ...n, ...patch } : n);
+    commit(prev => ({ ...prev, nodes: nextNodes }));
+    invalidate();
+    if (('fx' in patch || 'fy' in patch) && beams.length && nextNodes.length > 1) {
+      ++solveGenRef.current;
+      setSolving(false);
+      const scaled = nextNodes.map(n => ({ ...n, fx: n.fx * loadScalePct / 100, fy: n.fy * loadScalePct / 100 }));
+      setResult(solveTruss(applyDynamics(scaled, beams, dynamicsMode, wind, seismic), beams));
+      setResultStale(false);
+    }
+  };
   const applyForce = (fx: number, fy: number) => {
     if (!forceTarget) return;
-    const id = forceTarget.id;
-    commit((prev) => ({
-      ...prev,
-      nodes: prev.nodes.map((n) => (n.id === id ? { ...n, fx, fy } : n)),
-    }));
+    updateNodeAndAnalyze(forceTarget.id, { fx, fy });
     setForceTarget(null);
-    invalidate();
   };
 
-  const changeMaterial = (id: string) => {
-    commit((prev) => ({
-      ...prev,
-      materialId: id,
-      beams: prev.beams.map((b) => ({ ...b, materialId: id })),
-    }));
-    invalidate();
+  const materialSignature = (nextBeams: Beam[]) => JSON.stringify([nodes, nextBeams, loadScalePct, dynamicsMode, wind, seismic]);
+  const applyMaterialDesign = (nextBeams: Beam[], id: string, label: string, updateDefault = true) => {
+    const beforeNodes = applyDynamics(scaledUserNodes, beams, dynamicsMode, wind, seismic);
+    const afterNodes = applyDynamics(scaledUserNodes, nextBeams, dynamicsMode, wind, seismic);
+    const beforeResult = solveTruss(beforeNodes, beams);
+    const afterResult = solveTruss(afterNodes, nextBeams);
+    ++solveGenRef.current;
+    setSolving(false);
+    commit(prev => ({ ...prev, materialId: updateDefault ? id : prev.materialId, beams: nextBeams }));
+    setResult(afterResult);
+    setResultStale(false);
+    setHighlightBeamIds([]);
+    setHighlightNodeIds([]);
+    setMaterialChange({ before: materialSnapshot(beforeNodes, beams, beforeResult), after: materialSnapshot(afterNodes, nextBeams, afterResult), label, signature: materialSignature(nextBeams) });
+  };
+  const changeMaterial = (id: string, candidateBeams?: Beam[]) => {
+    applyMaterialDesign(candidateBeams ?? beams.map(b => ({ ...b, materialId: id })), id, 'Material substitution · all members');
   };
 
   const changeDefaultArea = (area: number) => {
@@ -736,15 +909,7 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
   const changeSelectedBeamSection = (section: SectionParams, mid: string) => {
     if (!selectedBeamId || !isValidSectionParams(section)) return;
     const props = computeSectionProps(section);
-    commit((prev) => ({
-      ...prev,
-      beams: prev.beams.map((b) =>
-        b.id === selectedBeamId
-          ? { ...b, section, area: props.area, I: props.I, materialId: mid }
-          : b,
-      ),
-    }));
-    invalidate();
+    applyMaterialDesign(beams.map(b => b.id === selectedBeamId ? { ...b, section, area: props.area, I: props.I, materialId: mid } : b), mid, 'Selected member · section / material', false);
   };
 
   const openFormula = () => {
@@ -756,25 +921,35 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
   const handleImport = async (file: File) => {
     try {
       const text = await file.text();
-      const parsed = parseTrussFile(text);
+      const parsed = tryParseTrussFile(text);
+      if (!parsed.ok) {
+        setAppAlert(alertForImportMessage(formatImportError(parsed.error)));
+        showToast('Import failed — see the message for details.');
+        return;
+      }
       replace({
-        nodes: parsed.nodes,
-        beams: parsed.beams,
-        materialId: parsed.materialId,
-        defaultArea: parsed.defaultArea,
+        nodes: parsed.data.nodes,
+        beams: parsed.data.beams,
+        materialId: parsed.data.materialId,
+        defaultArea: parsed.data.defaultArea,
       });
+      const importedName = parsed.data.name || file.name.replace(/\.(truss|json)$/i, '') || 'Imported design';
+      setProjectName(importedName);
+      setActiveProjectName(importedName);
       setSelectedNodeId(null);
       setSelectedBeamId(null);
       setBeamDraftFrom(null);
       invalidate();
+      showToast(`Imported “${importedName}”.`);
     } catch (err) {
-      setUnstableMsg(err instanceof Error ? err.message : 'Failed to import .truss file.');
+      setAppAlert(alertForImportMessage(formatImportError(err)));
+      showToast('Import failed — see the message for details.');
     }
   };
 
   const handleCopyTruss = async () => {
     try {
-      await navigator.clipboard.writeText(serializeTruss(state));
+      await navigator.clipboard.writeText(serializeTruss(state, projectName || 'TrussIQ Design'));
       showToast('Design JSON copied to clipboard.');
     } catch {
       showToast('Clipboard access unavailable.');
@@ -792,15 +967,20 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
       }
       const { generateOfficialReport } = await import('../lib/reportGenerator');
       await generateOfficialReport({
-        name: 'TrussIQ Structural Study Report',
+        name: `${projectName || 'TrussIQ'} · Structural Study Report`,
         state,
         result,
         ai,
         massCost,
         canvasImage,
       });
+      showToast('Official report PDF downloaded.');
     } catch (error) {
-      setUnstableMsg(error instanceof Error ? error.message : 'Could not generate the PDF report.');
+      setAppAlert(
+        alertForExportMessage(
+          error instanceof Error ? error.message : 'Could not generate the PDF report.',
+        ),
+      );
     }
   };
 
@@ -834,14 +1014,27 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
         onOpenTemplateLibrary={() => setShowTemplateLibrary(true)}
         onOpenGeometryTools={() => setShowGeometryTools(true)}
         onClear={clearAll}
-        onExportTruss={() => exportTrussFile(state, 'TrussIQ Design')}
+        onExportTruss={() => {
+          const name = projectName || 'TrussIQ Design';
+          exportTrussFile(state, name);
+          showToast(`Downloaded “${name}.truss”.`);
+        }}
         onCopyTruss={handleCopyTruss}
         onImportTruss={handleImport}
         onExportOfficialReport={handleOfficialReport}
+        onOpenProjectLibrary={() => setShowProjectLibrary(true)}
+        onOpenProjectSummary={() => setShowProjectSummary(true)}
         draftStatus={draftStatus}
         onSaveDraft={() => {
           sharedReviewSession.current = false;
-          setDraftStatus(saveLocalDraft(state) ? 'Saved locally' : 'Save failed — export a backup');
+          if (privacyPrefs.privateSession) {
+            setDraftStatus('Private session · export a .truss file to keep a copy');
+            showToast('Private session is on — models are not saved in this browser. Export a .truss file instead.');
+            return;
+          }
+          const ok = saveLocalDraft(state);
+          setDraftStatus(ok ? `Draft · ${projectName}` : 'Save failed — export a backup');
+          if (ok) showToast(`Autosave draft updated (“${projectName}”). Open My projects to name a lasting copy.`);
         }}
         onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
         onUndo={() => {
@@ -869,11 +1062,13 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
         onOpenCompare={() => { setShowDemo(false); setShowCollapse(false); setShowAR(false); setShowCompare(true); }}
         onOpenShortcuts={() => setShowShortcuts(true)}
         onOpenDemo={() => { setShowMission(false); setShowCollaboration(false); setShowImpact(false); setShowCompare(false); setShowAR(false); setShowCollapse(false); setShowDemo(true); }}
+        onOpenGuidedLesson={() => startGuidedLesson()}
         onOpenPresentation={() => { setShowDemo(false); setPresentationMode(true); }}
         onOpenMission={() => { setShowDemo(false); setShowCollaboration(false); setShowImpact(false); setShowMission(true); }}
         onOpenCollaboration={() => { setShowDemo(false); setShowMission(false); setShowImpact(false); setShowCollaboration(true); }}
         onOpenCommand={() => setShowCommandPalette(true)}
         onOpenBrief={() => setShowBrief(true)}
+        onOpenPrivacy={() => setShowPrivacy(true)}
         onOpenImpact={() => { setShowDemo(false); setShowMission(false); setShowCollaboration(false); setShowImpact(true); }}
         onOpenHome={onOpenHome ?? (() => undefined)}
         sidebarOpen={sidebarOpen}
@@ -1019,6 +1214,7 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
             memberFilter={memberFilter}
             displayUnits={displayUnits}
             resultPalette={resultPalette}
+            materialView={materialView}
             canvasRefCallback={setCanvasEl}
             onSelectNode={setSelectedNodeId}
             onSelectBeam={setSelectedBeamId}
@@ -1093,13 +1289,18 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
                 } catch {
                   brief = undefined;
                 }
+                const includePersonal = privacyPrefs.includePersonalFields;
                 exportLabWorksheet(state, result, {
                   title: brief?.title,
-                  author: brief?.author,
-                  course: brief?.course,
+                  author: includePersonal ? brief?.author : undefined,
+                  course: includePersonal ? brief?.course : undefined,
                   objective: brief?.objective,
                 });
-                showToast('Lab worksheet PDF downloaded.');
+                showToast(
+                  includePersonal
+                    ? 'Lab worksheet PDF downloaded (includes brief name fields).'
+                    : 'Lab worksheet PDF downloaded (names omitted — enable in Privacy to include).',
+                );
               }}
               onScreenshot={async () => {
                 const canvas = canvasEl.current;
@@ -1140,58 +1341,123 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
               onExit={() => setPresentationMode(false)}
             />
           )}
-          {activeChallenge && !presentationMode && (
+          {activeChallenge && !presentationMode && !demoActive && (
             <section className="absolute right-4 top-4 z-10 w-[min(20rem,calc(100%-2rem))] rounded-xl border border-accent/35 bg-surface-900/95 p-3 shadow-xl backdrop-blur-sm">
               <div className="flex items-start justify-between gap-3"><div><p className="text-[9px] font-semibold uppercase tracking-wider text-accent">Active investigation · {activeChallenge.id.slice(-3)}</p><h3 className="mt-1 text-xs font-semibold text-surface-100">{activeChallenge.title}</h3></div><button type="button" onClick={() => setActiveChallenge(null)} aria-label="Dismiss active investigation" className="text-surface-500 hover:text-surface-200"><X size={13} /></button></div>
               <p className="mt-2 text-[10px] leading-4 text-surface-300">{activeChallenge.brief}</p>
               <p className="mt-2 border-t border-surface-700 pt-2 text-[10px] leading-4 text-surface-400">Evidence: {activeChallenge.target}</p>
             </section>
           )}
-          {activeBridgeChallengeId && !presentationMode && !activeChallenge && (
-            <section className="absolute right-4 top-4 z-10 w-[min(20rem,calc(100%-2rem))] rounded-xl border border-accent/35 bg-surface-900/95 p-3 shadow-xl backdrop-blur-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[9px] font-semibold uppercase tracking-wider text-accent">Active bridge challenge</p>
-                  <h3 className="mt-1 text-xs font-semibold text-surface-100">
-                    {activeBridgeChallengeId === 'high-wind-resilience'
-                      ? 'High Wind Resilience'
-                      : 'The Low-Budget Span'}
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveBridgeChallengeId(null)}
-                  aria-label="Dismiss active bridge challenge"
-                  className="text-surface-500 hover:text-surface-200"
-                >
-                  <X size={13} />
-                </button>
-              </div>
-              <p className="mt-2 text-[10px] leading-4 text-surface-400">
-                Edit the model, run FEA, then reopen Challenge to check progress.
-              </p>
-            </section>
+          {activeScaffoldedChallenge && !presentationMode && !activeChallenge && !showGuidedLesson && !demoActive && (
+            <ActiveChallengePanel
+              key={activeScaffoldedChallenge.id}
+              challenge={activeScaffoldedChallenge}
+              nodes={nodes}
+              beams={beams}
+              result={result}
+              dynamicsMode={dynamicsMode}
+              onOpenHub={() => setShowScaffoldedHub(true)}
+              onDismiss={() => setActiveScaffoldedChallengeId(null)}
+            />
           )}
-          {!showTutorial && nodes.length === 0 && beams.length === 0 && !presentationMode && (
+          {showGuidedLesson && !presentationMode && (
+            <GuidedLessonMode
+              stepIndex={guidedLessonStep}
+              onStepIndex={setGuidedLessonStep}
+              state={state}
+              result={result}
+              onApplyState={(next) => {
+                commit(next);
+                invalidate();
+              }}
+              onRunSolver={() => runSolver()}
+              onSetTool={(t) => setTool(t)}
+              onClose={() => setShowGuidedLesson(false)}
+              onRestart={() => startGuidedLesson({ restart: true })}
+            />
+          )}
+          {demoActive && !presentationMode && (
+            <DemoPresenter
+              active={demoActive}
+              stepIndex={demoStepIndex}
+              onStepIndex={setDemoStepIndex}
+              result={result}
+              baselineUtilization={demoBaselineUtil}
+              designChange={demoDesignChange}
+              onMeetReady={() => {
+                setShowDeflection(false);
+                showToast('Warren classroom bridge ready — next, run analysis.');
+              }}
+              onRunFea={() => {
+                runSolver();
+                setShowDeflection(true);
+                showToast('Analysis complete — read tension, compression, and utilization.');
+              }}
+              onApplyDesignChange={() => {
+                const change = applyDemoDesignChange(state, result);
+                if (!change) {
+                  showToast('Run analysis first so Demo Mode can find the hottest member.');
+                  setDemoStepIndex(1);
+                  return;
+                }
+                setDemoBaselineUtil(
+                  change.previousPeakUtilization ?? (result?.success ? result.maxSafetyRatio : null),
+                );
+                setDemoDesignChange(change);
+                replace(change.state);
+                setHighlightBeamIds(change.beamIds);
+                setResult(null);
+                setResultStale(true);
+                setShowDeflection(false);
+                showToast(
+                  change.beamIds.length > 1
+                    ? `Reinforced ${change.beamIds.length} peak members: area ${change.previousArea.toFixed(0)} → ${change.nextArea.toFixed(0)} mm².`
+                    : `Reinforced ${change.beamId}: area ${change.previousArea.toFixed(0)} → ${change.nextArea.toFixed(0)} mm².`,
+                );
+              }}
+              onCompareSolve={() => {
+                runSolver();
+                setShowDeflection(true);
+                showToast('Compare peak utilization before vs after the reinforcement.');
+              }}
+              onResetDemo={resetDemo}
+              onExit={exitDemoMode}
+            />
+          )}
+          {!showTutorial && !showGuidedLesson && !demoActive && nodes.length === 0 && beams.length === 0 && !presentationMode && (
             <section className="pointer-events-none absolute inset-0 z-[5] flex items-center justify-center p-6 animate-fade-in">
               <div className="pointer-events-auto max-w-sm rounded-2xl border border-surface-700/90 bg-surface-900/92 px-5 py-5 text-center shadow-2xl shadow-black/25 backdrop-blur-md">
                 <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-accent">Empty canvas</p>
-                <h3 className="mt-2 text-base font-semibold text-surface-100">Start with a joint or a preset</h3>
+                <h3 className="mt-2 text-base font-semibold text-surface-100">Start with a joint or a lesson</h3>
                 <p className="mt-2 text-xs leading-5 text-surface-400">
-                  Place joints by hand, build top/bottom chords from <span className="text-surface-200">Presets → Geometry tools</span>, or load a Howe / Warren / Pratt example.
+                  New to trusses? Open <span className="text-surface-200">Guided Lesson Mode</span> or a scaffolded challenge. Or place joints, build chords, or load a Howe / Warren / Pratt example.
                 </p>
                 <div className="mt-4 flex flex-wrap justify-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setTool('node')}
+                    onClick={() => startGuidedLesson()}
                     className="rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-surface-950 hover:bg-teal-400"
+                  >
+                    Guided lesson
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowScaffoldedHub(true)}
+                    className="rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs font-medium text-accent hover:bg-accent/20"
+                  >
+                    Challenges
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTool('node')}
+                    className="rounded-lg border border-surface-600 px-3 py-2 text-xs font-medium text-surface-200 hover:border-accent/40 hover:text-accent"
                   >
                     Place a joint
                   </button>
                   <button
                     type="button"
                     onClick={() => setShowGeometryTools(true)}
-                    className="rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs font-medium text-accent hover:bg-accent/20"
+                    className="rounded-lg border border-surface-600 px-3 py-2 text-xs font-medium text-surface-200 hover:border-accent/40 hover:text-accent"
                   >
                     Build chords
                   </button>
@@ -1209,7 +1475,7 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
               </div>
             </section>
           )}
-          {showGuide && !showTutorial && nodes.length > 0 && !result && !activeBridgeChallengeId && !activeChallenge && (
+          {showGuide && !showTutorial && nodes.length > 0 && !result && !activeScaffoldedChallengeId && !activeChallenge && (
             <section className="absolute left-4 top-14 z-10 w-[min(23rem,calc(100%-2rem))] rounded-xl border border-accent/30 bg-surface-900/95 p-4 shadow-2xl shadow-black/20 backdrop-blur-sm animate-fade-in">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2 text-accent">
@@ -1244,7 +1510,7 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
                 </div>
                 <div className="flex items-center gap-2 rounded-lg bg-surface-800/80 px-2.5 py-2 text-[11px] text-surface-300">
                   <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-surface-700 font-mono text-[9px] text-surface-200">3</span>
-                  Run FEA to reveal forces and safety.
+                  Run analysis to reveal forces and safety.
                 </div>
               </div>
               <div className="mt-4 flex gap-2">
@@ -1297,19 +1563,16 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
               selectedBeamId={selectedBeamId}
               selectedNodeId={selectedNodeId}
               onMaterialChange={changeMaterial}
+              onApplyMaterials={applyMaterialDesign}
+              materialChange={materialChange?.signature === materialSignature(beams) ? materialChange : null}
+              materialView={materialView}
+              onMaterialView={setMaterialView}
               onCompareMaterials={() => setShowMaterialStudy(true)}
               onAreaChange={changeDefaultArea}
               onSelectedBeamArea={changeSelectedBeamArea}
               onSelectedBeamSection={changeSelectedBeamSection}
               onSelectedNodeChange={(patch) => {
-                if (!selectedNodeId) return;
-                commit((prev) => ({
-                  ...prev,
-                  nodes: prev.nodes.map((node) =>
-                    node.id === selectedNodeId ? { ...node, ...patch } : node,
-                  ),
-                }));
-                invalidate();
+                if (selectedNodeId) updateNodeAndAnalyze(selectedNodeId, patch);
               }}
               onOpenFormula={openFormula}
               onFocusBeams={(ids) => {
@@ -1340,8 +1603,13 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
           onClose={() => setForceTarget(null)}
         />
       )}
-      {unstableMsg && (
-        <UnstableModal message={unstableMsg} onClose={() => setUnstableMsg(null)} />
+      {appAlert && (
+        <UnstableModal
+          title={appAlert.title}
+          message={appAlert.message}
+          tip={appAlert.tip}
+          onClose={() => setAppAlert(null)}
+        />
       )}
       {formula && <FormulaInspector data={formula} onClose={() => setFormula(null)} />}
       {showTutorial && (
@@ -1410,6 +1678,17 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
             if (mode === 'seismic') setSeismic((current) => ({ ...current, time: 0 }));
           }}
           onOpenTutorial={() => openTutorial(false)}
+          onOpenGuidedLesson={() => startGuidedLesson()}
+          onOpenDemo={() => {
+            setShowMission(false);
+            setShowCollaboration(false);
+            setShowImpact(false);
+            setShowCompare(false);
+            setShowAR(false);
+            setShowCollapse(false);
+            setShowDemo(true);
+          }}
+          onOpenScaffoldedChallenges={() => setShowScaffoldedHub(true)}
           onOpenMission={() => setShowMission(true)}
           onOpenCollaboration={() => setShowCollaboration(true)}
           onOpenPresentation={() => setPresentationMode(true)}
@@ -1419,29 +1698,63 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
           onOpen3DEditor={() => setShow3DEditor(true)}
           onOpenShortcuts={() => setShowShortcuts(true)}
           onExport={() => {
-            // Defer so the palette close click does not immediately dismiss the export menu.
+            // Prefer the TopBar export menu; fall back when Presentation Mode hides TopBar.
             window.setTimeout(() => {
-              document
-                .querySelector<HTMLButtonElement>('[aria-label="Open export and import menu"]')
-                ?.click();
+              const exportBtn = document.querySelector<HTMLButtonElement>(
+                '[aria-label="Open export and import menu"]',
+              );
+              if (exportBtn) {
+                exportBtn.click();
+                return;
+              }
+              void handleOfficialReport();
             }, 40);
           }}
           onClear={clearAll}
           onOpenBrief={() => setShowBrief(true)}
           onOpenImpact={() => setShowImpact(true)}
           onOpenGeometryTools={() => setShowGeometryTools(true)}
+          onOpenProjectLibrary={() => setShowProjectLibrary(true)}
+          onOpenProjectSummary={() => setShowProjectSummary(true)}
+        />
+      )}
+      {showPrivacy && (
+        <PrivacyPanel
+          onClose={() => setShowPrivacy(false)}
+          onPrefsChange={(next) => {
+            setPrivacyPrefsState(next);
+            if (next.privateSession) {
+              removeStoredValue('trussiq-local-draft');
+              setDraftStatus('Private session · not saved to this browser');
+              showToast('Private session on — drafts will not be stored in this browser.');
+            }
+          }}
+          onCleared={() => {
+            setProjectName('Untitled design');
+            setDraftStatus(privacyPrefs.privateSession ? 'Private session · cleared' : 'Private data cleared');
+            showToast('Private browser data cleared.');
+          }}
         />
       )}
       {showBrief && (
         <ProjectBrief
           onClose={() => setShowBrief(false)}
           onExport={(brief: ProjectBriefData) => {
-            const url = URL.createObjectURL(new Blob([JSON.stringify(brief, null, 2)], { type: 'application/json' }));
+            const includePersonal = privacyPrefs.includePersonalFields;
+            const payload = includePersonal
+              ? brief
+              : { ...brief, author: '', course: '' };
+            const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
             const link = document.createElement('a');
             link.href = url;
             link.download = `${brief.title.replace(/[^\w-]+/g, '_') || 'trussiq-brief'}.json`;
             link.click();
             window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+            showToast(
+              includePersonal
+                ? 'Brief exported with name fields.'
+                : 'Brief exported without student/course names (Privacy default).',
+            );
           }}
         />
       )}
@@ -1460,33 +1773,30 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
       <ChallengeMode
         nodes={nodes}
         beams={beams}
-        activeChallengeId={activeBridgeChallengeId}
-        onStart={(id, starter) => {
+        result={result}
+        dynamicsMode={dynamicsMode}
+        activeChallengeId={activeScaffoldedChallengeId}
+        openExternal={showScaffoldedHub}
+        onCloseExternal={() => setShowScaffoldedHub(false)}
+        hideFab={demoActive}
+        onStart={(challenge, starter) => {
           replace(starter);
           invalidate();
-          setActiveBridgeChallengeId(id);
-          if (id === 'high-wind-resilience') {
+          setActiveChallenge(null);
+          setShowGuidedLesson(false);
+          setActiveScaffoldedChallengeId(challenge.id);
+          setSelectedNodeId(null);
+          setSelectedBeamId(null);
+          if (challenge.starter.kind === 'bridge' && challenge.starter.id === 'high-wind-resilience') {
             setWind(HIGH_WIND_PROFILE);
+            setDynamicsMode('wind');
+          } else if (challenge.id === 'intermediate-wind-screen') {
+            setWind(DEFAULT_WIND);
             setDynamicsMode('wind');
           } else {
             setDynamicsMode('none');
           }
-        }}
-      />
-      <DemoHelper
-        onLoadWarren={() => {
-          if ((nodes.length > 0 || beams.length > 0) && !window.confirm('Load the Warren truss for the demo? This replaces the current design.')) return false;
-          loadPreset('warren');
-          return true;
-        }}
-        onRunSolver={runSolver}
-        onToggleDeflection={() => {
-          if (!result?.success) {
-            runSolver();
-            setShowDeflection(true);
-          } else {
-            setShowDeflection((visible) => !visible);
-          }
+          showToast(`Started: ${challenge.title}`);
         }}
       />
       {showTemplateLibrary && (
@@ -1499,6 +1809,37 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
             setSelectedBeamId(null);
           }}
           onClose={() => setShowTemplateLibrary(false)}
+        />
+      )}
+      {showProjectLibrary && (
+        <ProjectLibrary
+          state={state}
+          onNameChange={setProjectName}
+          onLoad={(snapshot, name) => {
+            replace(snapshot);
+            invalidate();
+            setProjectName(name);
+            setActiveProjectName(name);
+            setSelectedNodeId(null);
+            setSelectedBeamId(null);
+            setDraftStatus(`Opened · ${name}`);
+            showToast(`Opened “${name}”.`);
+          }}
+          onClose={() => setShowProjectLibrary(false)}
+        />
+      )}
+      {showProjectSummary && (
+        <ProjectSummaryPanel
+          state={state}
+          result={result}
+          canvasImage={(() => {
+            try {
+              return canvasEl.current?.toDataURL('image/png') ?? null;
+            } catch {
+              return null;
+            }
+          })()}
+          onClose={() => setShowProjectSummary(false)}
         />
       )}
       <Suspense fallback={null}>
@@ -1573,7 +1914,7 @@ function PresentationHud({
           <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-surface-400">TrussIQ presentation</span>
         </div>
         <h2 className="mt-1 text-lg font-semibold tracking-tight text-surface-100">
-          {result?.success ? (result.passed ? 'Below the modeled yield limit' : 'Modeled yield limit exceeded') : 'Run FEA to reveal the load path'}
+          {result?.success ? (result.passed ? 'Below the modeled yield limit' : 'Modeled yield limit exceeded') : 'Run analysis to reveal the load path'}
         </h2>
         <p className="mt-1 text-xs text-surface-400">
           {nodeCount} nodes · {beamCount} members · Direct Stiffness Method

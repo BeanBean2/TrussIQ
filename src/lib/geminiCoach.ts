@@ -4,6 +4,7 @@
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { getPrivacyPrefs } from './privacy';
 import { readStoredValue, writeStoredValue, removeStoredValue } from './storage';
 import type { AIAnalysis, Beam, FEAResult, Node } from './types';
 
@@ -103,6 +104,11 @@ export async function askGeminiCoach(
   result: FEAResult | null,
   analysis: AIAnalysis,
 ): Promise<string> {
+  if (!getPrivacyPrefs().allowCloudCoach) {
+    throw new Error(
+      'Cloud coaching is locked. Open Privacy settings and enable “Allow cloud Gemini coach” before sending model data to Google.',
+    );
+  }
   const apiKey = getGeminiApiKey();
   if (!apiKey) {
     throw new Error(

@@ -1,3 +1,5 @@
+import { nodeLabel, memberLabel } from './entityLabels';
+import type { Beam } from './types';
 import type { AIAnalysis, FEAResult, Node } from './types';
 
 /** Build a transparent, local response from TrussIQ's current solver and rule-based advice. */
@@ -6,6 +8,7 @@ export function getLocalCoachReply(
   analysis: AIAnalysis,
   result: FEAResult | null,
   nodes: Node[],
+  beams: Beam[] = [],
 ): string {
   const q = question.toLowerCase();
   if (!result?.success) {
@@ -26,7 +29,7 @@ export function getLocalCoachReply(
     const netX = reactions.reduce((sum, reaction) => sum + reaction.fx, 0);
     const netY = reactions.reduce((sum, reaction) => sum + reaction.fy, 0);
     const details = active.slice(0, 4).map((reaction) =>
-      `${reaction.nodeId}: Rx ${reaction.fx.toFixed(1)} N, Ry ${reaction.fy.toFixed(1)} N`,
+      `${nodeLabel(reaction.nodeId)}: Rx ${reaction.fx.toFixed(1)} N, Ry ${reaction.fy.toFixed(1)} N`,
     ).join('; ');
     return `Support reactions (signs follow the model's x/y axes): ${details}${active.length > 4 ? `; and ${active.length - 4} more support node(s)` : ''}. Net reaction is (${netX.toFixed(2)}, ${netY.toFixed(2)}) N, which balances the net applied load in a solved static model.`;
   }
@@ -37,7 +40,7 @@ export function getLocalCoachReply(
       .sort((a, b) => Math.hypot(b.fx, b.fy) - Math.hypot(a.fx, a.fy));
     if (!loaded.length) return 'This model has no nonzero nodal loads. Add a force at a joint, then solve again to see its effect.';
     const details = loaded.slice(0, 5).map((node) =>
-      `${node.id}: Fx ${node.fx.toFixed(1)} N, Fy ${node.fy.toFixed(1)} N`,
+      `${nodeLabel(node.id)}: Fx ${node.fx.toFixed(1)} N, Fy ${node.fy.toFixed(1)} N`,
     ).join('; ');
     const totalX = nodes.reduce((sum, node) => sum + node.fx, 0);
     const totalY = nodes.reduce((sum, node) => sum + node.fy, 0);
@@ -48,7 +51,7 @@ export function getLocalCoachReply(
     const tension = result.members.filter((member) => member.status === 'tension');
     const compression = result.members.filter((member) => member.status === 'compression');
     const describe = (label: string, members: typeof result.members) => {
-      const ids = members.slice(0, 6).map((member) => `${member.beamId} (${Math.abs(member.axialForce).toFixed(1)} N)`).join(', ');
+      const ids = members.slice(0, 6).map((member) => `${memberLabel(member.beamId, beams)} (${Math.abs(member.axialForce).toFixed(1)} N)`).join(', ');
       return `${label}: ${members.length ? ids + (members.length > 6 ? `, plus ${members.length - 6} more` : '') : 'none'}`;
     };
     return `${describe('Tension', tension)}. ${describe('Compression', compression)}. Positive axial force means tension; negative means compression. This model carries axial force only and does not model member bending.`;
@@ -67,7 +70,7 @@ export function getLocalCoachReply(
 
   if (/\b(yield|safe|safety factor|overstress|stress)\b/.test(q)) {
     const peakText = peak
-      ? `The highest member utilization is ${peak.beamId} at ${(peak.safetyRatio * 100).toFixed(1)}%.`
+      ? `The highest member utilization is ${memberLabel(peak.beamId, beams)} at ${(peak.safetyRatio * 100).toFixed(1)}%.`
       : 'There are no member results to compare.';
     const factorText = Number.isFinite(safetyFactor) ? `${safetyFactor.toFixed(2)}` : 'infinite (no member stress)';
     return `${peakText} The yield safety factor is ${factorText}. ${yielded.length ? `${yielded.length} member(s) exceed the material yield limit; increase their area, choose a stronger material, or reduce the load, then solve again.` : 'No members exceed the modeled yield limit for this load case.'} This is a linear, axial-only yield check, not a complete safety assessment; buckling is screened separately and connection, bracing, fatigue, and code checks are not included.`;

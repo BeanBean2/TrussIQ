@@ -1,28 +1,52 @@
 import {
+  ArrowDownUp,
+  ArrowLeftRight,
   Box,
+  Copy,
   Eraser,
   Focus,
+  Layers,
   Link2,
   MousePointer2,
   Plus,
   RotateCcw,
+  Settings2,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { useAccessibleDialog } from '../hooks/useAccessibleDialog';
+import { addTrussChords } from '../lib/chordBuilder';
+import { computeSectionProps, SECTION_PRESETS, solidRodFromArea } from '../lib/crossSections';
 import { nextId } from '../lib/ids';
-import { computeSectionProps, solidRodFromArea } from '../lib/crossSections';
+import { MATERIALS } from '../lib/materials';
 import {
+  applyEditorView,
   buildEditableTrussGroup,
+  duplicateMirroredHalf,
   intersectEditPlane,
+  mirrorStructureHorizontal,
+  mirrorStructureVertical,
   snapFea,
   threeToFea,
+  type Editor3DView,
 } from '../lib/truss3dEdit';
-import type { Beam, GridSize, StructureState, ToolMode } from '../lib/types';
+import type { Beam, GridSize, StructureState, SupportType, ToolMode } from '../lib/types';
 
-type Editor3DTool = Extract<ToolMode, 'select' | 'node' | 'beam' | 'erase'>;
+type Editor3DTool = Extract<ToolMode, 'select' | 'node' | 'beam' | 'erase' | 'support' | 'force'>;
+
+const SUPPORT_CYCLE: SupportType[] = ['none', 'pin', 'rollerY', 'rollerX', 'fixed'];
+
+const VIEW_PRESETS: { id: Editor3DView; label: string }[] = [
+  { id: 'iso', label: 'Iso' },
+  { id: 'front', label: 'Front' },
+  { id: 'back', label: 'Back' },
+  { id: 'top', label: 'Top' },
+  { id: 'bottom', label: 'Bottom' },
+  { id: 'left', label: 'Left' },
+  { id: 'right', label: 'Right' },
+];
 
 interface Truss3DEditorProps {
   state: StructureState;
@@ -63,13 +87,18 @@ export function Truss3DEditor({
   const dragRef = useRef<{ nodeId: string; offsetX: number; offsetY: number } | null>(null);
   const rebuildRef = useRef<() => void>(() => undefined);
   const fitRef = useRef<() => void>(() => undefined);
+  const setViewRef = useRef<(view: Editor3DView) => void>(() => undefined);
 
   const [tool, setTool] = useState<Editor3DTool>('select');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedBeamId, setSelectedBeamId] = useState<string | null>(null);
   const [draftFrom, setDraftFrom] = useState<string | null>(null);
-  const [status, setStatus] = useState('Orbit: right-drag or two-finger · Left-drag joints in Select');
+  const [activeView, setActiveView] = useState<Editor3DView>('iso');
+  const [showInspector, setShowInspector] = useState(true);
+  const [status, setStatus] = useState('Orbit: right-drag · Views: Front/Back/Top/Bottom · Edit parts in the inspector');
   const [error, setError] = useState<string | null>(null);
+  const [chordHeight, setChordHeight] = useState(100);
+  const [bayLength, setBayLength] = useState(120);
 
   useEffect(() => {
     stateRef.current = state;
@@ -87,10 +116,97 @@ export function Truss3DEditor({
     onChangeRef.current = onChange;
   }, [onChange]);
 
+  const selectedNode = useMemo(
+    () => state.nodes.find((n) => n.id === selectedNodeId) ?? null,
+    [state.nodes, selectedNodeId],
+  );
+  const selectedBeam = useMemo(
+    () => state.beams.find((b) => b.id === selectedBeamId) ?? null,
+    [state.beams, selectedBeamId],
+  );
+
   const boundsHint = useMemo(() => {
     if (state.nodes.length === 0) return 'Empty model — use Node tool and click the grid plane';
     return `${state.nodes.length} joints · ${state.beams.length} members · snap ${gridSize} mm`;
   }, [state.nodes.length, state.beams.length, gridSize]);
+
+  const patchState = (next: StructureState) => onChange(next);
+
+  const updateSelectedNode = (patch: Partial<(typeof state.nodes)[number]>) => {
+    if (!selectedNodeId) return;
+    patchState({
+      ...state,
+      nodes: state.nodes.map((n) => (n.id === selectedNodeId ? { ...n, ...patch } : n)),
+    });
+  };
+
+  const updateSelectedBeam = (patch: Partial<Beam>) => {
+    if (!selectedBeamId) return;
+    patchState({
+      ...state,
+      beams: state.beams.map((b) => (b.id === selectedBeamId ? { ...b, ...patch } : b)),
+    });
+  };
+
+  const applyMaterialToSelection = (materialId: string) => {
+    if (selectedBeam) {
+      updateSelectedBeam({ materialId });
+      setStatus(`Member ${selectedBeam.id} → ${MATERIALS.find((m) => m.id === materialId)?.name ?? materialId}`);
+      return;
+    }
+    patchState({
+      ...state,
+      materialId,
+      beams: state.beams.map((b) => ({ ...b, materialId })),
+    });
+    setStatus(`All members → ${MATERIALS.find((m) => m.id === materialId)?.name ?? materialId}`);
+  };
+
+  const applySectionPreset = (presetId: string) => {
+    const preset = SECTION_PRESETS.find((p) => p.id === presetId);
+    if (!preset || !selectedBeam) return;
+    const props = computeSectionProps(preset.section);
+    updateSelectedBeam({ section: preset.section, area: props.area, I: props.I });
+    setStatus(`Member ${selectedBeam.id} section → ${preset.label}`);
+  };
+
+  const applyArea = (area: number) => {
+    if (!selectedBeam || !(area > 0)) return;
+    const section = solidRodFromArea(area);
+    const props = computeSectionProps(section);
+    updateSelectedBeam({ section, area: props.area, I: props.I });
+    setStatus(`Member ${selectedBeam.id} area → ${props.area.toFixed(1)} mm²`);
+  };
+
+  const addChord = (which: 'bottom' | 'top' | 'both') => {
+    const xs = state.nodes.map((n) => n.x);
+    const ys = state.nodes.map((n) => n.y);
+    const startX = xs.length ? Math.min(...xs) : 180;
+    const startY = ys.length ? Math.max(...ys) : 320;
+    const span = xs.length ? Math.max(...xs) - Math.min(...xs) : bayLength * 4;
+    const bayCount = Math.max(1, Math.round(span / Math.max(bayLength, 1)) || 4);
+    const next = addTrussChords(state, {
+      startX,
+      startY,
+      bayCount,
+      bayLength: span > 0 ? span / bayCount : bayLength,
+      height: chordHeight,
+      bottom: which === 'bottom' || which === 'both',
+      top: which === 'top' || which === 'both',
+      verticals: which === 'both',
+      supports: which !== 'top' && state.nodes.every((n) => n.support === 'none'),
+      materialId: state.materialId,
+      area: state.defaultArea,
+    });
+    patchState(next);
+    setStatus(
+      which === 'both'
+        ? 'Added top & bottom chords with verticals'
+        : which === 'top'
+          ? 'Added / extended top chord'
+          : 'Added / extended bottom chord',
+    );
+  };
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -131,7 +247,6 @@ export function Truss3DEditor({
         MIDDLE: THREE.MOUSE.DOLLY,
         RIGHT: THREE.MOUSE.PAN,
       };
-      // Left-drag is reserved for joint edits when Select tool hits a node
       controls.enablePan = true;
 
       const planeHelper = new THREE.Mesh(
@@ -149,6 +264,17 @@ export function Truss3DEditor({
 
       const raycaster = new THREE.Raycaster();
       const pointer = new THREE.Vector2();
+
+      const modelBounds = () => {
+        const target = model ?? scene;
+        const box = new THREE.Box3().setFromObject(target);
+        if (box.isEmpty()) {
+          return { center: new THREE.Vector3(), radius: 120 };
+        }
+        const center = box.getCenter(new THREE.Vector3());
+        const sphere = box.getBoundingSphere(new THREE.Sphere());
+        return { center, radius: Math.max(sphere.radius, 40) };
+      };
 
       const rebuild = () => {
         if (model) {
@@ -172,7 +298,12 @@ export function Truss3DEditor({
         const box = new THREE.Box3().setFromObject(model);
         const size = box.getSize(new THREE.Vector3());
         const span = Math.max(size.x, size.y, 400);
-        grid = new THREE.GridHelper(span * 2.5, Math.max(10, Math.round((span * 2.5) / Math.max(gridSize, 1))), 0x334155, 0x1e293b);
+        grid = new THREE.GridHelper(
+          span * 2.5,
+          Math.max(10, Math.round((span * 2.5) / Math.max(gridSize, 1))),
+          0x334155,
+          0x1e293b,
+        );
         grid.rotation.x = Math.PI / 2;
         grid.position.z = -0.5;
         scene.add(grid);
@@ -180,22 +311,15 @@ export function Truss3DEditor({
       rebuildRef.current = rebuild;
 
       const fit = () => {
-        const target = model ?? scene;
-        const box = new THREE.Box3().setFromObject(target);
-        if (box.isEmpty()) {
-          camera.position.set(280, 220, 520);
-          controls!.target.set(0, 0, 0);
-          controls!.update();
-          return;
-        }
-        const center = box.getCenter(new THREE.Vector3());
-        const sphere = box.getBoundingSphere(new THREE.Sphere());
-        const radius = Math.max(sphere.radius, 40);
-        camera.position.copy(center).add(new THREE.Vector3(radius * 1.2, radius * 0.85, radius * 1.6));
-        controls!.target.copy(center);
-        controls!.update();
+        const { center, radius } = modelBounds();
+        applyEditorView('iso', camera, controls!, center, radius);
       };
       fitRef.current = fit;
+
+      setViewRef.current = (view: Editor3DView) => {
+        const { center, radius } = modelBounds();
+        applyEditorView(view, camera, controls!, center, radius);
+      };
 
       rebuild();
       fit();
@@ -210,7 +334,10 @@ export function Truss3DEditor({
       const pick = (): THREE.Intersection | null => {
         if (!model) return null;
         const hits = raycaster.intersectObjects(model.children, false);
-        return hits.find((hit) => hit.object.userData.kind === 'node' || hit.object.userData.kind === 'beam') ?? null;
+        return (
+          hits.find((hit) => hit.object.userData.kind === 'node' || hit.object.userData.kind === 'beam') ??
+          null
+        );
       };
 
       const applyPatch = (patch: Partial<StructureState>) => {
@@ -247,7 +374,39 @@ export function Truss3DEditor({
         if (toolNow === 'select' && hit?.object.userData.kind === 'beam') {
           setSelectedBeamId(hit.object.userData.id as string);
           setSelectedNodeId(null);
-          setStatus(`Selected member ${hit.object.userData.id}`);
+          setStatus(`Selected member ${hit.object.userData.id} — change material/section in the inspector`);
+          rebuild();
+          return;
+        }
+
+        if (toolNow === 'support') {
+          if (hit?.object.userData.kind !== 'node') {
+            setStatus('Support tool: click a joint to cycle pin / roller / fixed');
+            return;
+          }
+          const nodeId = hit.object.userData.id as string;
+          const node = stateRef.current.nodes.find((n) => n.id === nodeId);
+          if (!node) return;
+          const idx = SUPPORT_CYCLE.indexOf(node.support);
+          const next = SUPPORT_CYCLE[(idx + 1) % SUPPORT_CYCLE.length];
+          applyPatch({
+            nodes: stateRef.current.nodes.map((n) => (n.id === nodeId ? { ...n, support: next } : n)),
+          });
+          setSelectedNodeId(nodeId);
+          setSelectedBeamId(null);
+          setStatus(`Joint ${nodeId} support → ${next}`);
+          return;
+        }
+
+        if (toolNow === 'force') {
+          if (hit?.object.userData.kind !== 'node') {
+            setStatus('Force tool: click a joint, then edit Fx/Fy in the inspector');
+            return;
+          }
+          const nodeId = hit.object.userData.id as string;
+          setSelectedNodeId(nodeId);
+          setSelectedBeamId(null);
+          setStatus(`Joint ${nodeId} selected — set loads in the inspector`);
           rebuild();
           return;
         }
@@ -264,10 +423,7 @@ export function Truss3DEditor({
           }
           const id = nextId('n');
           applyPatch({
-            nodes: [
-              ...stateRef.current.nodes,
-              { id, x, y, support: 'none', fx: 0, fy: 0 },
-            ],
+            nodes: [...stateRef.current.nodes, { id, x, y, support: 'none', fx: 0, fy: 0 }],
           });
           setSelectedNodeId(id);
           setStatus(`Placed joint at (${x}, ${y}) mm`);
@@ -295,8 +451,7 @@ export function Truss3DEditor({
           }
           const exists = stateRef.current.beams.some(
             (b) =>
-              (b.nodeI === from && b.nodeJ === nodeId) ||
-              (b.nodeI === nodeId && b.nodeJ === from),
+              (b.nodeI === from && b.nodeJ === nodeId) || (b.nodeI === nodeId && b.nodeJ === from),
           );
           if (exists) {
             setStatus('Those joints are already connected');
@@ -419,7 +574,6 @@ export function Truss3DEditor({
     }
   }, [gridSize]);
 
-  // Rebuild meshes when structure / selection changes (outside WebGL bootstrap)
   useEffect(() => {
     rebuildRef.current();
   }, [state, selectedNodeId, selectedBeamId, draftFrom]);
@@ -440,7 +594,7 @@ export function Truss3DEditor({
           <div>
             <h2 className="text-sm font-semibold text-surface-100">3D editor</h2>
             <p className="text-[11px] text-surface-400">
-              Planar FEA model · edit joints in the structure plane · {boundsHint}
+              Edit joints, members, materials, supports · view every side · {boundsHint}
             </p>
           </div>
         </div>
@@ -450,7 +604,7 @@ export function Truss3DEditor({
             onClick={() => {
               setTool('select');
               setDraftFrom(null);
-              setStatus('Select: left-drag joints · orbit with right-drag');
+              setStatus('Select: drag joints · click members to change parts');
             }}
             icon={<MousePointer2 size={13} />}
             label="Select"
@@ -475,6 +629,26 @@ export function Truss3DEditor({
             label="Beam"
           />
           <ToolChip
+            active={tool === 'support'}
+            onClick={() => {
+              setTool('support');
+              setDraftFrom(null);
+              setStatus('Support: click a joint to cycle pin / roller / fixed');
+            }}
+            icon={<Layers size={13} />}
+            label="Support"
+          />
+          <ToolChip
+            active={tool === 'force'}
+            onClick={() => {
+              setTool('force');
+              setDraftFrom(null);
+              setStatus('Force: select a joint, then edit Fx/Fy in the inspector');
+            }}
+            icon={<Settings2 size={13} />}
+            label="Force"
+          />
+          <ToolChip
             active={tool === 'erase'}
             onClick={() => {
               setTool('erase');
@@ -486,7 +660,22 @@ export function Truss3DEditor({
           />
           <button
             type="button"
-            onClick={() => fitRef.current()}
+            onClick={() => setShowInspector((v) => !v)}
+            aria-pressed={showInspector}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs ${
+              showInspector
+                ? 'border-accent/50 bg-accent/15 text-accent'
+                : 'border-surface-700 text-surface-300 hover:border-surface-500'
+            }`}
+          >
+            Parts
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              fitRef.current();
+              setActiveView('iso');
+            }}
             className="inline-flex items-center gap-1.5 rounded-lg border border-surface-700 px-2.5 py-2 text-xs text-surface-300 hover:border-surface-500"
             title="Fit model"
           >
@@ -512,23 +701,267 @@ export function Truss3DEditor({
         </div>
       </div>
 
-      <div ref={mountRef} className="relative min-h-0 flex-1 overflow-hidden">
-        {error && (
-          <div className="absolute inset-0 grid place-items-center p-6 text-center">
-            <div className="max-w-md rounded-xl border border-amber-400/30 bg-surface-900/90 p-5">
-              <p className="text-sm font-semibold text-amber-200">3D editor unavailable</p>
-              <p className="mt-2 text-xs leading-5 text-surface-300">{error}</p>
+      <div className="flex min-h-0 flex-1">
+        <div ref={mountRef} className="relative min-h-0 flex-1 overflow-hidden">
+          {error && (
+            <div className="absolute inset-0 grid place-items-center p-6 text-center">
+              <div className="max-w-md rounded-xl border border-amber-400/30 bg-surface-900/90 p-5">
+                <p className="text-sm font-semibold text-amber-200">3D editor unavailable</p>
+                <p className="mt-2 text-xs leading-5 text-surface-300">{error}</p>
+              </div>
             </div>
+          )}
+          <div className="pointer-events-auto absolute left-3 top-3 z-10 flex flex-wrap gap-1">
+            {VIEW_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => {
+                  setActiveView(preset.id);
+                  setViewRef.current(preset.id);
+                  setStatus(`View: ${preset.label}`);
+                }}
+                className={`rounded-md border px-2 py-1 text-[10px] font-medium ${
+                  activeView === preset.id
+                    ? 'border-accent/50 bg-accent/15 text-accent'
+                    : 'border-surface-700 bg-surface-900/90 text-surface-300 hover:border-surface-500'
+                }`}
+              >
+                {preset.label}
+              </button>
+            ))}
           </div>
-        )}
-        <div className="pointer-events-none absolute bottom-3 left-3 max-w-[min(28rem,calc(100%-1.5rem))] rounded-md bg-surface-900/85 px-2.5 py-1.5 text-[10px] text-surface-300">
-          <span className="inline-flex items-center gap-1.5">
-            <RotateCcw size={11} /> {status}
-          </span>
-          <span className="mt-1 block text-surface-500">
-            Analysis stays planar (2D). Depth is for viewing only — use Extruded preview for the AR/GLB model.
-          </span>
+          <div className="pointer-events-none absolute bottom-3 left-3 max-w-[min(28rem,calc(100%-1.5rem))] rounded-md bg-surface-900/85 px-2.5 py-1.5 text-[10px] text-surface-300">
+            <span className="inline-flex items-center gap-1.5">
+              <RotateCcw size={11} /> {status}
+            </span>
+            <span className="mt-1 block text-surface-500">
+              FEA stays planar (2D). Use view buttons to inspect the other side, top, and bottom while editing.
+            </span>
+          </div>
         </div>
+
+        {showInspector && (
+          <aside className="flex w-[min(22rem,100%)] shrink-0 flex-col overflow-y-auto border-l border-surface-700 bg-surface-900/95">
+            <div className="border-b border-surface-700 px-3 py-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-accent">Parts & geometry</p>
+              <p className="mt-0.5 text-[10px] text-surface-400">Change selected members, supports, loads, chords, and mirrors.</p>
+            </div>
+
+            <section className="space-y-2 border-b border-surface-700 p-3">
+              <p className="text-[10px] font-semibold text-surface-200">Quick geometry</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                <ActionBtn
+                  icon={<ArrowLeftRight size={12} />}
+                  label="Mirror L↔R"
+                  onClick={() => {
+                    patchState(mirrorStructureHorizontal(state));
+                    setStatus('Mirrored left ↔ right');
+                  }}
+                />
+                <ActionBtn
+                  icon={<ArrowDownUp size={12} />}
+                  label="Mirror U↔D"
+                  onClick={() => {
+                    patchState(mirrorStructureVertical(state));
+                    setStatus('Mirrored top ↔ bottom');
+                  }}
+                />
+                <ActionBtn
+                  icon={<Copy size={12} />}
+                  label="Copy other side"
+                  onClick={() => {
+                    patchState(duplicateMirroredHalf(state));
+                    setStatus('Duplicated a mirrored half beside the model');
+                    window.setTimeout(() => fitRef.current(), 40);
+                  }}
+                />
+                <ActionBtn
+                  icon={<Layers size={12} />}
+                  label="Bottom chord"
+                  onClick={() => addChord('bottom')}
+                />
+                <ActionBtn icon={<Layers size={12} />} label="Top chord" onClick={() => addChord('top')} />
+                <ActionBtn
+                  icon={<Layers size={12} />}
+                  label="Top+bottom"
+                  onClick={() => addChord('both')}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-[10px] text-surface-400">
+                  Chord height (mm)
+                  <input
+                    type="number"
+                    min={20}
+                    step={10}
+                    value={chordHeight}
+                    onChange={(e) => setChordHeight(Number(e.target.value) || 100)}
+                    className="mt-1 w-full rounded border border-surface-700 bg-surface-800 px-2 py-1.5 text-xs text-surface-100"
+                  />
+                </label>
+                <label className="text-[10px] text-surface-400">
+                  Bay length (mm)
+                  <input
+                    type="number"
+                    min={20}
+                    step={10}
+                    value={bayLength}
+                    onChange={(e) => setBayLength(Number(e.target.value) || 120)}
+                    className="mt-1 w-full rounded border border-surface-700 bg-surface-800 px-2 py-1.5 text-xs text-surface-100"
+                  />
+                </label>
+              </div>
+            </section>
+
+            {selectedBeam && (
+              <section className="space-y-2 border-b border-surface-700 p-3">
+                <p className="text-[10px] font-semibold text-surface-200">Member {selectedBeam.id}</p>
+                <label className="block text-[10px] text-surface-400">
+                  Material
+                  <select
+                    value={selectedBeam.materialId}
+                    onChange={(e) => applyMaterialToSelection(e.target.value)}
+                    className="mt-1 w-full rounded border border-surface-700 bg-surface-800 px-2 py-1.5 text-xs text-surface-100"
+                  >
+                    {MATERIALS.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-[10px] text-surface-400">
+                  Section preset
+                  <select
+                    defaultValue=""
+                    onChange={(e) => {
+                      if (e.target.value) applySectionPreset(e.target.value);
+                      e.target.value = '';
+                    }}
+                    className="mt-1 w-full rounded border border-surface-700 bg-surface-800 px-2 py-1.5 text-xs text-surface-100"
+                  >
+                    <option value="">Choose a section…</option>
+                    {SECTION_PRESETS.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-[10px] text-surface-400">
+                  Area (mm²)
+                  <input
+                    type="number"
+                    min={1}
+                    step={5}
+                    value={Math.round(selectedBeam.area)}
+                    onChange={(e) => applyArea(Number(e.target.value))}
+                    className="mt-1 w-full rounded border border-surface-700 bg-surface-800 px-2 py-1.5 text-xs text-surface-100"
+                  />
+                </label>
+                <p className="text-[10px] text-surface-500">
+                  {selectedBeam.nodeI} → {selectedBeam.nodeJ}
+                </p>
+              </section>
+            )}
+
+            {selectedNode && (
+              <section className="space-y-2 border-b border-surface-700 p-3">
+                <p className="text-[10px] font-semibold text-surface-200">Joint {selectedNode.id}</p>
+                <label className="block text-[10px] text-surface-400">
+                  Support
+                  <select
+                    value={selectedNode.support}
+                    onChange={(e) => updateSelectedNode({ support: e.target.value as SupportType })}
+                    className="mt-1 w-full rounded border border-surface-700 bg-surface-800 px-2 py-1.5 text-xs text-surface-100"
+                  >
+                    {SUPPORT_CYCLE.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="text-[10px] text-surface-400">
+                    Fx (N)
+                    <input
+                      type="number"
+                      step={100}
+                      value={selectedNode.fx}
+                      onChange={(e) => updateSelectedNode({ fx: Number(e.target.value) || 0 })}
+                      className="mt-1 w-full rounded border border-surface-700 bg-surface-800 px-2 py-1.5 text-xs text-surface-100"
+                    />
+                  </label>
+                  <label className="text-[10px] text-surface-400">
+                    Fy (N)
+                    <input
+                      type="number"
+                      step={100}
+                      value={selectedNode.fy}
+                      onChange={(e) => updateSelectedNode({ fy: Number(e.target.value) || 0 })}
+                      className="mt-1 w-full rounded border border-surface-700 bg-surface-800 px-2 py-1.5 text-xs text-surface-100"
+                    />
+                  </label>
+                  <label className="text-[10px] text-surface-400">
+                    X (mm)
+                    <input
+                      type="number"
+                      step={gridSize}
+                      value={selectedNode.x}
+                      onChange={(e) =>
+                        updateSelectedNode({ x: snapFea(Number(e.target.value) || 0, gridSize) })
+                      }
+                      className="mt-1 w-full rounded border border-surface-700 bg-surface-800 px-2 py-1.5 text-xs text-surface-100"
+                    />
+                  </label>
+                  <label className="text-[10px] text-surface-400">
+                    Y (mm)
+                    <input
+                      type="number"
+                      step={gridSize}
+                      value={selectedNode.y}
+                      onChange={(e) =>
+                        updateSelectedNode({ y: snapFea(Number(e.target.value) || 0, gridSize) })
+                      }
+                      className="mt-1 w-full rounded border border-surface-700 bg-surface-800 px-2 py-1.5 text-xs text-surface-100"
+                    />
+                  </label>
+                </div>
+              </section>
+            )}
+
+            {!selectedNode && !selectedBeam && (
+              <section className="p-3 text-[10px] leading-4 text-surface-400">
+                Select a joint or member in the viewport to edit its parts. Use <span className="text-surface-200">Back</span>{' '}
+                / <span className="text-surface-200">Top</span> / <span className="text-surface-200">Bottom</span> views to
+                work the other side of the truss.
+              </section>
+            )}
+
+            {!selectedBeam && state.beams.length > 0 && (
+              <section className="space-y-2 p-3">
+                <p className="text-[10px] font-semibold text-surface-200">Apply material to all members</p>
+                <select
+                  defaultValue=""
+                  onChange={(e) => {
+                    if (e.target.value) applyMaterialToSelection(e.target.value);
+                    e.target.value = '';
+                  }}
+                  className="w-full rounded border border-surface-700 bg-surface-800 px-2 py-1.5 text-xs text-surface-100"
+                >
+                  <option value="">Choose material…</option>
+                  {MATERIALS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </section>
+            )}
+          </aside>
+        )}
       </div>
     </div>
   );
@@ -542,7 +975,7 @@ function ToolChip({
 }: {
   active: boolean;
   onClick: () => void;
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
 }) {
   return (
@@ -555,6 +988,27 @@ function ToolChip({
           ? 'border-accent/50 bg-accent/15 text-accent'
           : 'border-surface-700 text-surface-300 hover:border-surface-500'
       }`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+function ActionBtn({
+  icon,
+  label,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center justify-center gap-1 rounded-lg border border-surface-700 px-2 py-2 text-[10px] text-surface-200 hover:border-accent/40 hover:text-accent"
     >
       {icon}
       {label}

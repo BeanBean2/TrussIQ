@@ -504,9 +504,16 @@ button.panel-edge-tab,
     right: 0.5rem;
   }
 
-  .challenge-fab,
-  .demo-helper-fab {
+  .challenge-fab {
     bottom: 4.85rem;
+  }
+
+  .demo-presenter {
+    top: 3.25rem;
+    right: 0.5rem;
+    left: 0.5rem;
+    width: auto;
+    max-width: none;
   }
   .resize-divider-auto {
     position: absolute;

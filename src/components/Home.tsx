@@ -98,8 +98,8 @@ export function Home({ onOpenWorkspace, onOpenDemo, sharedReview, onOpenSharedRe
                 <><PanelsTopLeft size={15} /> Start a design</>
               )}
             </button>
-            <button type="button" onClick={onOpenDemo} className="inline-flex items-center gap-2 rounded-lg border border-surface-700 px-4 py-2.5 text-sm font-medium text-surface-200 transition hover:border-surface-500 hover:bg-surface-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50">
-              <BookOpen size={15} /> {isFirstVisit ? 'Or try a live demo' : 'Guided demo'}
+            <button type="button" onClick={onOpenDemo} className="inline-flex items-center gap-2 rounded-lg border border-accent/40 bg-accent/10 px-4 py-2.5 text-sm font-semibold text-accent transition hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50">
+              <BookOpen size={15} /> {isFirstVisit ? 'Launch Demo Mode' : 'Demo Mode'}
             </button>
           </div>
           {isFirstVisit && (
@@ -162,7 +162,7 @@ export function Home({ onOpenWorkspace, onOpenDemo, sharedReview, onOpenSharedRe
 
       <footer className="mx-auto flex max-w-7xl flex-col gap-2 px-5 py-6 text-[10px] text-surface-500 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10">
         <span>TrussIQ · Free classroom structural lab</span>
-        <span>Local-first · Optional Gemini only with your key · Not construction certification</span>
+        <span>Private by default · Local FEA · Share &amp; Gemini need consent · Not construction certification</span>
       </footer>
     </main>
   );

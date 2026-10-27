@@ -1,3 +1,4 @@
+import { nodeLabel } from '../lib/entityLabels';
 import { Calculator, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useAccessibleDialog } from '../hooks/useAccessibleDialog';
@@ -50,9 +51,9 @@ export function FormulaInspector({ data, onClose }: FormulaInspectorProps) {
 
         <div className="space-y-4 px-4 py-4 text-sm">
           <p className="text-xs text-surface-400">
-            Member <span className="font-mono text-accent">{data.beamId}</span> between{' '}
-            <span className="font-mono">{data.nodeI}</span> →{' '}
-            <span className="font-mono">{data.nodeJ}</span>
+            Member <span className="font-mono text-accent">{`${nodeLabel(data.nodeI)}–${nodeLabel(data.nodeJ)}`}</span> between{' '}
+            <span className="font-mono">{nodeLabel(data.nodeI)}</span> →{' '}
+            <span className="font-mono">{nodeLabel(data.nodeJ)}</span>
           </p>
 
           <Section title="1. Geometry & Direction Cosines">

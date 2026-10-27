@@ -1,3 +1,4 @@
+import { nodeLabel, memberLabel } from './entityLabels';
 /**
  * TrussIQ AI Structural Optimization Assistant
  *
@@ -51,11 +52,6 @@ function eulerCriticalStress(
   return (Math.PI * Math.PI * E * I) / (A_mm2 * KL * KL);
 }
 
-function shortLabel(id: string, prefix: string): string {
-  const parts = id.split('_');
-  return `${prefix}${parts[parts.length - 1]}`;
-}
-
 /**
  * Analyze a solved structure and return ranked engineering advice.
  */
@@ -80,6 +76,7 @@ export function analyzeStructure(
     return { items, bucklingBeamIds, zeroForceBeamIds, hotNodeIds };
   }
 
+  const shortLabel = (id: string, prefix: string) => prefix === 'N' ? nodeLabel(id) : memberLabel(id, beams);
   const nodeMap = new Map(nodes.map((n) => [n.id, n]));
   const beamMap = new Map(beams.map((b) => [b.id, b]));
 

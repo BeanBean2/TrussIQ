@@ -82,12 +82,13 @@ export function FeatureBar({
           title="Show member force labels (lengths always shown)"
         />
         <label className="inline-flex items-center gap-1 rounded-md border border-surface-700 px-1.5 py-1 text-[10px] text-surface-300">
-          <Filter size={11} className="text-surface-400" />
+          <Filter size={11} className="text-surface-400" aria-hidden="true" />
           <select
             value={memberFilter}
             onChange={(e) => onMemberFilter(e.target.value as MemberViewFilter)}
             className="max-w-[7.5rem] bg-transparent text-[10px] outline-none"
             title="Filter members"
+            aria-label="Filter members by tension, compression, yielded, or zero-force"
           >
             <option value="all">All</option>
             <option value="tension">Tension</option>
@@ -107,7 +108,7 @@ export function FeatureBar({
           className="inline-flex items-center gap-1 rounded-md border border-surface-700 px-1.5 py-1 text-[10px] text-surface-300"
           title="Scale all applied loads"
         >
-          <Scale size={11} className="text-surface-400" />
+          <Scale size={11} className="text-surface-400" aria-hidden="true" />
           <input
             type="range"
             min={0}
@@ -116,13 +117,18 @@ export function FeatureBar({
             value={loadScalePct}
             onChange={(e) => onLoadScale(Number(e.target.value))}
             className="w-14 accent-accent"
+            aria-label="Load scale percent"
+            aria-valuemin={0}
+            aria-valuemax={200}
+            aria-valuenow={loadScalePct}
           />
-          <span className="w-7 font-mono text-accent">{loadScalePct}%</span>
+          <span className="w-7 font-mono text-accent" aria-hidden="true">{loadScalePct}%</span>
         </label>
         <button
           type="button"
           onClick={onScreenshot}
           title="Copy canvas screenshot"
+          aria-label={screenshotStatus ? `Screenshot ${screenshotStatus}` : 'Copy canvas screenshot'}
           className="inline-flex items-center gap-1 rounded-md border border-surface-700 px-1.5 py-1 text-[10px] text-surface-300 hover:border-accent/50 hover:text-accent"
         >
           <Camera size={11} />

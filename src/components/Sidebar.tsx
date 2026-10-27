@@ -1,15 +1,17 @@
+import { nodeLabel, memberLabel } from '../lib/entityLabels';
+import { FailurePanel } from './FailurePanel';
+import { MaterialLab } from './MaterialLab';
+import type { MaterialChange, MaterialView } from '../lib/materialLab';
 import { AlertTriangle, ArrowRight, CheckCircle2, ChevronRight, Gauge, XCircle } from 'lucide-react';
 import { lazy, Suspense, useState } from 'react';
 import type { SectionParams } from '../lib/crossSections';
 import { solidRodFromArea } from '../lib/crossSections';
-import { MATERIALS } from '../lib/materials';
 import { isYieldLimitMet } from '../lib/challengePrep';
 import { calculateEquilibriumResidual } from '../lib/equilibrium';
 import type { AIAnalysis, Beam, FEAResult, Node } from '../lib/types';
 import type { StructureAudit } from '../lib/structureAudit';
 import { AIAdvisor } from './AIAdvisor';
 import { AuditPanel } from './AuditPanel';
-import { GlossaryTooltip } from './GlossaryTooltip';
 import { SectionEditor } from './SectionEditor';
 
 const AnalyticsPanel = lazy(() => import('./AnalyticsPanel').then((module) => ({ default: module.AnalyticsPanel })));
@@ -25,6 +27,10 @@ interface SidebarProps {
   selectedBeamId: string | null;
   selectedNodeId: string | null;
   onMaterialChange: (id: string) => void;
+  onApplyMaterials: (beams: Beam[], id: string, label: string, updateDefault?: boolean) => void;
+  materialChange: MaterialChange | null;
+  materialView: MaterialView;
+  onMaterialView: (v: MaterialView) => void;
   onCompareMaterials: () => void;
   onAreaChange: (area: number) => void;
   onSelectedBeamArea: (area: number) => void;
@@ -51,6 +57,7 @@ export function Sidebar({
   selectedBeamId,
   selectedNodeId,
   onMaterialChange,
+  onApplyMaterials, materialChange, materialView, onMaterialView,
   onCompareMaterials,
   onAreaChange,
   onSelectedBeamArea,
@@ -66,7 +73,6 @@ export function Sidebar({
   const [tab, setTab] = useState<Tab>('inspect');
   const selectedBeam = beams.find((b) => b.id === selectedBeamId) ?? null;
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) ?? null;
-  const mat = MATERIALS.find((m) => m.id === materialId);
   const equilibrium = result?.success
     ? calculateEquilibriumResidual(analysisNodes, beams, result)
     : null;
@@ -121,6 +127,7 @@ export function Sidebar({
       </div>
 
       <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4">
+        <FailurePanel beams={beams} result={result} onFocus={onFocusBeams} />
         {tab === 'health' && (
           <HealthPanel
             nodes={nodes}
@@ -136,33 +143,7 @@ export function Sidebar({
 
         {tab === 'inspect' && (
           <>
-            <section className="space-y-2">
-              <div className="flex items-center justify-between"><label className="text-xs font-medium text-surface-300">Material</label><button type="button" onClick={onCompareMaterials} className="text-[10px] font-medium text-accent hover:text-teal-300">Compare options</button></div>
-              <select
-                value={materialId}
-                onChange={(e) => onMaterialChange(e.target.value)}
-                className="w-full rounded-lg border border-surface-700 bg-surface-800 px-3 py-2 text-sm text-surface-100 outline-none focus:border-accent"
-              >
-                {MATERIALS.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-              {mat && (
-                <div className="rounded-lg bg-surface-800/80 px-3 py-2 font-mono text-[11px] text-surface-400">
-                  <div>
-                    <GlossaryTooltip term="Young's Modulus" /> E = {mat.E} GPa
-                  </div>
-                  <div>
-                    <GlossaryTooltip term="Yield Strength" /> = {mat.sigmaYield} MPa
-                  </div>
-                  <div>
-                    ρ = {mat.density} g/cm³ · ${mat.costUSDPerKg}/kg
-                  </div>
-                </div>
-              )}
-            </section>
+            <MaterialLab beams={beams} materialId={materialId} selectedBeamId={selectedBeamId} result={result} change={materialChange} view={materialView} onView={onMaterialView} onApply={onApplyMaterials} onDefault={onMaterialChange} onCompare={onCompareMaterials} />
 
             <section className="space-y-2">
               <div className="flex items-center justify-between">
@@ -195,7 +176,7 @@ export function Sidebar({
                 </h3>
                 {selectedNode && (
                   <div className="space-y-2 text-[11px] text-surface-300">
-                    <div className="font-mono">Node {selectedNode.id}</div>
+                    <div className="font-mono">Node {nodeLabel(selectedNode.id)}</div>
                     <div className="grid grid-cols-2 gap-2">
                       <NodeNumberInput label="X (mm)" value={selectedNode.x} onChange={(value) => onSelectedNodeChange({ x: value })} />
                       <NodeNumberInput label="Y (mm)" value={selectedNode.y} onChange={(value) => onSelectedNodeChange({ y: value })} />
@@ -209,7 +190,7 @@ export function Sidebar({
                           value={selectedNode.support}
                           onChange={(event) => onSelectedNodeChange({ support: event.target.value as Node['support'] })}
                           className="rounded border border-surface-700 bg-surface-800 px-1.5 py-1 text-surface-200"
-                          aria-label={`Support condition for ${selectedNode.id}`}
+                          aria-label={`Support condition for ${nodeLabel(selectedNode.id)}`}
                         >
                           <option value="none">Free</option>
                           <option value="pin">Pin</option>
@@ -223,9 +204,9 @@ export function Sidebar({
                 )}
                 {selectedBeam && (
                   <div className="space-y-2 font-mono text-[11px] text-surface-300">
-                    <div>Beam {selectedBeam.id}</div>
+                    <div>Member {memberLabel(selectedBeam.id, beams)}</div>
                     <div>
-                      {selectedBeam.nodeI} → {selectedBeam.nodeJ}
+                      {nodeLabel(selectedBeam.nodeI)} → {nodeLabel(selectedBeam.nodeJ)}
                     </div>
                     <div>A = {selectedBeam.area.toFixed(1)} mm²</div>
                     <button
@@ -260,7 +241,7 @@ export function Sidebar({
               <h3 className="mb-2 text-xs font-medium text-surface-300">Structure Status</h3>
               {!result ? (
                 <div className="rounded-lg border border-dashed border-surface-600 px-3 py-3 text-center text-xs text-surface-400">
-                  Run the FEA solver to see results
+                  Run analysis to see results
                 </div>
               ) : result.unstable || !result.success ? (
                 <div className="flex items-start gap-2 rounded-lg border border-warn/40 bg-warn/10 px-3 py-2.5 text-sm text-warn">
@@ -270,21 +251,21 @@ export function Sidebar({
               ) : result.passed ? (
                 <div className="flex items-center gap-2 rounded-lg border border-pass/40 bg-pass/10 px-3 py-2.5 text-sm font-semibold text-pass">
                   <CheckCircle2 size={18} />
-                  YIELD CHECK PASSED
+                  MATERIAL STRENGTH CHECK PASSED
                 </div>
               ) : (
                 <div className="flex items-center gap-2 rounded-lg border border-fail/40 bg-fail/10 px-3 py-2.5 text-sm font-semibold text-fail animate-pulse-glow">
                   <XCircle size={18} />
-                  YIELD LIMIT EXCEEDED
+                  MATERIAL STRENGTH LIMIT EXCEEDED
                 </div>
               )}
-              {result?.success && <p className="mt-2 text-[10px] leading-4 text-surface-500">This checks linear axial stress against yield only. Buckling is estimated separately; joints, bracing, fatigue, and building-code requirements are not verified.</p>}
+              {result?.success && <p className="mt-2 text-[10px] leading-4 text-surface-500">This compares axial stress to the directional material strength limit. Buckling is estimated separately; joints, bracing, fatigue, and building-code requirements are not verified.</p>}
             </section>
 
             <section>
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="text-xs font-medium text-surface-300">Member Results</h3>
-                {result?.success && <button type="button" onClick={() => downloadMemberCsv(result)} className="rounded border border-surface-700 px-2 py-1 text-[10px] text-surface-300 hover:border-accent/50 hover:text-accent">Export CSV</button>}
+                {result?.success && <button type="button" onClick={() => downloadMemberCsv(result, beams)} className="rounded border border-surface-700 px-2 py-1 text-[10px] text-surface-300 hover:border-accent/50 hover:text-accent">Export CSV</button>}
               </div>
               {!result?.success || result.members.length === 0 ? (
                 <p className="text-xs text-surface-500">No member data yet.</p>
@@ -296,7 +277,7 @@ export function Sidebar({
                         <th className="px-2 py-1.5 font-medium">ID</th>
                         <th className="px-2 py-1.5 font-medium">N (N)</th>
                         <th className="px-2 py-1.5 font-medium">σ</th>
-                        <th className="px-2 py-1.5 font-medium" title="Yield safety factor: material yield stress divided by absolute member stress">Yield SF</th>
+                        <th className="px-2 py-1.5 font-medium" title="Strength safety factor: directional material limit divided by absolute member stress">Strength SF</th>
                         <th className="px-2 py-1.5 font-medium">Type</th>
                       </tr>
                     </thead>
@@ -306,7 +287,7 @@ export function Sidebar({
                           key={m.beamId}
                           role="button"
                           tabIndex={0}
-                          aria-label={`Select member ${m.beamId}`}
+                          aria-label={`Select member ${memberLabel(m.beamId, beams)}`}
                           onClick={() => onFocusBeams([m.beamId])}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
@@ -325,7 +306,7 @@ export function Sidebar({
                           } cursor-pointer transition-colors hover:bg-surface-700/60`}
                         >
                           <td className="px-2 py-1.5">
-                            {m.beamId.replace(/^b_/, '').slice(-4)}
+                            {memberLabel(m.beamId, beams)}
                             {ai.bucklingBeamIds.includes(m.beamId) ? ' ⚠' : ''}
                           </td>
                           <td className="px-2 py-1.5">{m.axialForce.toFixed(0)}</td>
@@ -350,11 +331,11 @@ export function Sidebar({
                 <div className="overflow-hidden rounded-lg border border-surface-700">
                   <table className="w-full text-left text-[10px]">
                     <thead className="bg-surface-800 text-surface-400"><tr><th className="px-2 py-1.5">Node</th><th className="px-2 py-1.5">Rx (N)</th><th className="px-2 py-1.5">Ry (N)</th></tr></thead>
-                    <tbody className="font-mono">{result.reactions.filter((reaction) => Math.abs(reaction.fx) > 1e-8 || Math.abs(reaction.fy) > 1e-8).map((reaction) => <tr key={reaction.nodeId} className="border-t border-surface-800 text-surface-300"><td className="px-2 py-1.5">{reaction.nodeId}</td><td className="px-2 py-1.5">{reaction.fx.toFixed(1)}</td><td className="px-2 py-1.5">{reaction.fy.toFixed(1)}</td></tr>)}</tbody>
+                    <tbody className="font-mono">{result.reactions.filter((reaction) => Math.abs(reaction.fx) > 1e-8 || Math.abs(reaction.fy) > 1e-8).map((reaction) => <tr key={nodeLabel(reaction.nodeId)} className="border-t border-surface-800 text-surface-300"><td className="px-2 py-1.5">{nodeLabel(reaction.nodeId)}</td><td className="px-2 py-1.5">{reaction.fx.toFixed(1)}</td><td className="px-2 py-1.5">{reaction.fy.toFixed(1)}</td></tr>)}</tbody>
                   </table>
                 </div>
                 <p className={`mt-2 text-[10px] ${equilibriumBalanced ? 'text-pass' : 'text-warn'}`}>
-                  Joint force-balance check: {equilibriumBalanced ? 'within numerical tolerance' : 'above numerical tolerance'} · max imbalance {equilibrium.maxForceN.toExponential(2)} N ({(equilibrium.relative * 100).toExponential(2)}% of peak model force){equilibrium.nodeId ? ` at ${equilibrium.nodeId}` : ''}
+                  Joint force-balance check: {equilibriumBalanced ? 'within numerical tolerance' : 'above numerical tolerance'} · max imbalance {equilibrium.maxForceN.toExponential(2)} N ({(equilibrium.relative * 100).toExponential(2)}% of peak model force){equilibrium.nodeId ? ` at ${nodeLabel(equilibrium.nodeId)}` : ''}
                 </p>
                 <p className="mt-1 text-[10px] leading-4 text-surface-500">This numerical check covers force balance only; it does not verify yield, buckling, connections, or overall structural safety.</p>
               </section>
@@ -396,10 +377,10 @@ export function Sidebar({
   );
 }
 
-function downloadMemberCsv(result: FEAResult): void {
+function downloadMemberCsv(result: FEAResult, beams: Beam[]): void {
   const rows = [
-    ['Member ID', 'Axial Force (N)', 'Stress (MPa)', 'Yield Utilization (|stress| / yield)', 'Status', 'Length (mm)', 'Yielded'],
-    ...result.members.map((member) => [member.beamId, member.axialForce, member.stress, member.safetyRatio, member.status, member.length, member.yielded]),
+    ['Member endpoints', 'Axial Force (N)', 'Stress (MPa)', 'Yield Utilization (|stress| / yield)', 'Status', 'Length (mm)', 'Yielded'],
+    ...result.members.map((member) => [memberLabel(member.beamId, beams), member.axialForce, member.stress, member.safetyRatio, member.status, member.length, member.yielded]),
   ];
   const csv = rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\r\n');
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -485,13 +466,19 @@ function HealthPanel({
         <p className="mt-3 text-xs leading-5 text-surface-400">
           {score >= 85 ? 'Most model checks are complete; explain the assumptions and remaining limits.' : 'Complete these learning checks to review the model.'} This score is not a structural rating.
         </p>
+        <p
+          role="note"
+          className="mt-3 rounded-lg border border-warn/25 bg-warn/10 px-2.5 py-2 text-[10px] leading-4 text-warn"
+        >
+          <strong className="font-semibold">Educational estimate only.</strong> Analysis results are not certified construction blueprints, code compliance, or professional engineering approval.
+        </p>
       </section>
 
       <section className="space-y-2">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-surface-400">Model checks</h3>
         <HealthCheck done={geometry === 25} label="Geometry audit" detail={audit.errors ? `${audit.errors} error(s) need attention` : 'No blocking geometry errors'} />
         <HealthCheck done={analysis === 25} label="FEA analysis" detail={result?.success ? 'Solver completed successfully' : 'Run the solver to unlock results'} />
-        <HealthCheck done={yieldLimitMet} label="Yield limit" detail={result?.success ? `${result.maxSafetyRatio >= 1 ? 'Exceeded' : 'Below limit'} · peak use ${(result.maxSafetyRatio * 100).toFixed(0)}%` : 'Waiting for analysis'} />
+        <HealthCheck done={yieldLimitMet} label="Material strength limit" detail={result?.success ? `${result.maxSafetyRatio >= 1 ? 'Exceeded' : 'Below limit'} · peak use ${(result.maxSafetyRatio * 100).toFixed(0)}%` : 'Waiting for analysis'} />
         <HealthCheck done={Boolean(result?.success)} label="Buckling estimate" detail={ai.bucklingBeamIds.length ? `${ai.bucklingBeamIds.length} heuristic flag(s); review assumptions` : 'No heuristic flags; buckling is not certified'} />
       </section>
 

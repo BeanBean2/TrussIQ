@@ -3,7 +3,7 @@
  * Used for axial stiffness (EA) and Euler buckling (π²EI/(KL)²).
  */
 
-export type SectionKind = 'solidRod' | 'hollowTube' | 'iBeam';
+export type SectionKind = 'solidRod' | 'hollowTube' | 'iBeam' | 'rectangle';
 
 export interface SolidRodParams {
   kind: 'solidRod';
@@ -29,7 +29,8 @@ export interface IBeamParams {
   webThickness: number;
 }
 
-export type SectionParams = SolidRodParams | HollowTubeParams | IBeamParams;
+export interface RectangleParams { kind: 'rectangle'; width: number; height: number; }
+export type SectionParams = SolidRodParams | HollowTubeParams | IBeamParams | RectangleParams;
 
 export interface SectionProperties {
   area: number; // mm²
@@ -47,6 +48,8 @@ export function isValidSectionParams(value: unknown): value is SectionParams {
   } else if (section.kind === 'hollowTube') {
     if (!finitePositive(section.outerDiameter) || typeof section.innerDiameter !== 'number' ||
       !Number.isFinite(section.innerDiameter) || (section.outerDiameter as number) < 0.2 || section.innerDiameter < 0 || section.innerDiameter >= (section.outerDiameter as number)) return false;
+  } else if (section.kind === 'rectangle') {
+    if (!finitePositive(section.width, section.height) || (section.width as number) < 0.1 || (section.height as number) < 0.1) return false;
   } else if (section.kind === 'iBeam') {
     if (!finitePositive(section.height, section.flangeWidth, section.flangeThickness, section.webThickness) ||
       (section.height as number) < 1 || (section.flangeWidth as number) < 1 ||
@@ -69,6 +72,7 @@ export const DEFAULT_SECTION: SectionParams = {
 /** Compute A and I for a section definition. */
 export function computeSectionProps(section: SectionParams): SectionProperties {
   switch (section.kind) {
+    case 'rectangle': return { area: section.width * section.height, I: Math.min(section.width * section.height ** 3, section.height * section.width ** 3) / 12, label: `${section.width.toFixed(1)} × ${section.height.toFixed(1)} mm rectangle` };
     case 'solidRod': {
       const r = section.diameter / 2;
       const area = Math.PI * r * r;

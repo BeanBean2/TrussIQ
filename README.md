@@ -21,11 +21,51 @@
 - **Solve** — Linear Direct Stiffness Method (`Ku = F`): axial forces, stress, yield utilization, displacements, and support reactions.
 - **Inspect** — Color-coded members, length labels, optional force labels, deflection overlay, formula inspector, and structure audit.
 - **Compare** — Materials, sections, mass/cost estimates, wind and seismic *quasi-static* load cases, side-by-side compare, interactive **3D editor**, and extruded 3D/GLB preview.
-- **Learn** — Guided tour, live demo, bridge challenges, mission mode, printable lab worksheet, engineering coach (local rules by default).
+- **Learn** — **Demo Mode** (turnkey live pitch with Reset Demo), **Guided Lesson Mode** (4-step truss intro), **scaffolded challenges** (beginner → advanced with live FEA scorecards), UI tour, mission mode, printable lab worksheet, engineering coach (local rules by default).
 - **Classroom** — SI ↔ US display units, colorblind-safer result palette, named class-period drafts, learning portfolio export.
-- **Share** — Local drafts, `.truss` import/export, review links, PDF reports, and project brief.
+- **Projects** — Named local project library (save / reopen / duplicate), `.truss` import/export with friendly validation errors, and privacy-aware **project summaries** (model viz, FEA, design score, reflection).
+- **Share** — Local drafts, review links, PDF reports, and project brief.
 
-Results are **learning estimates**, not construction design or safety certification.
+**Educational estimate only:** TrussIQ results are educational estimates from a linear, axial-only Direct Stiffness Method model. They are **not** certified construction blueprints, code compliance, or professional engineering approval.
+
+### Guided Lesson Mode
+
+A docked, step-by-step lesson for students new to truss engineering. The canvas, FEA solver, undo history, and local draft saving stay fully usable while the lesson panel is open.
+
+| Step | Focus |
+| --- | --- |
+| 1 | Build a simple truss (nodes and members) |
+| 2 | Add supports (pin/roller) and external loads |
+| 3 | Run the Direct Stiffness Method FEA solver |
+| 4 | Interpret tension vs compression and yield utilization |
+
+**How to launch**
+
+- Top bar → **Lesson**
+- Empty canvas → **Guided lesson**
+- Command palette (`Ctrl+K`) → “Guided Lesson Mode”
+
+**Controls:** progress bar and step tracker, **Back** / **Next**, per-step **Set up…** helpers, and a prominent **Restart Lesson** (reloads the Step 1 mini-truss geometry).
+
+**Educational objectives:** name the parts of a planar truss, explain why supports and loads matter, run an analysis, and read member status (tension/compression) plus peak yield utilization as a classroom screen—not a construction certification.
+
+### Scaffolded challenges
+
+Ten progressive engineering goals with constraints, progressive hints, starter models, and a live scorecard that compares the current design to challenge criteria using FEA results (utilization, mass, cost, deflection, wind/buckling screens).
+
+| Tier | Examples |
+| --- | --- |
+| Beginner | Stable triangle, read tension/compression, light deck load |
+| Intermediate | Mass budget, classroom cost cap, deflection limit, wind screen |
+| Advanced | Low-budget 10 m span, high-wind resilience, efficient robot arm |
+
+**How to launch**
+
+- Floating **Challenge** button (bottom-right)
+- Empty canvas → **Challenges**
+- Command palette (`Ctrl+K`) → “Scaffolded challenges”
+
+The hub and active challenge panel include the educational-estimate disclaimer and are keyboard / screen-reader accessible (dialog semantics, ARIA labels, focus rings, progressive hint reveal).
 
 ---
 
@@ -38,28 +78,47 @@ npm run dev
 
 Open the URL Vite prints (default `http://localhost:5173`), or use the [live demo](https://happypotato9001.github.io/TrussIQ/).
 
+### Release verification (required before claiming ready)
+
+Run these on a clean machine checkout:
+
+```bash
+npm install
+npm run verify
+```
+
+`npm run verify` runs **lint → automated smoke tests → production build**. Do not treat the app as submission-ready until this exits **0**.
+
+Then smoke the UI from a **private/incognito window** (no prior localStorage):
+
+1. Open `npm run preview` after a successful verify, or the live Pages URL.
+2. Home → **Demo Mode** → Launch → Run analysis → reinforce → **Reset Demo**.
+3. Import a `.truss` export; confirm a bad/corrupt file shows a clear import message (not a blank failure).
+4. Export → **Save .truss file** and confirm a success toast.
+5. Narrow the window (~360px width) and confirm Demo coach / tools remain usable.
+
 | Script | Purpose |
 | --- | --- |
 | `npm run dev` | Development server |
-| `npm run verify` | Lint + solver smoke tests + production build |
+| `npm run verify` | Lint + workflow smoke tests + production build (**gate**) |
 | `npm run build` | Production build (`dist/`) |
 | `npm run build:pages` | Build with GitHub Pages base `/TrussIQ/` |
 | `npm run check:pages-artifact` | Verify Pages asset paths after `build:pages` |
-| `npm run preview` | Preview the production build |
-| `npm test` | FEA, equilibrium, and import/export checks |
+| `npm run preview` | Preview the production build locally |
+| `npm test` | Solver, equilibrium, import/export, demo, and summary checks |
 | `npm run lint` | Oxlint |
 
-GitHub Actions runs lint, tests, and build before deploying to Pages.
+GitHub Actions runs lint, tests, and build before deploying to Pages. Live pitch notes: [DEMO_PACKAGE.md](DEMO_PACKAGE.md).
 
 ---
 
 ## Workspace tour
 
 1. **Home** — Purpose, sample Howe analysis, guided tour / demo entry.
-2. **Top bar** — **Run FEA**, Presets, Dynamics, Demo, Impact; secondary tools under **More**.
+2. **Top bar** — **Run FEA**, Presets, Dynamics, **Lesson**, **Demo**, Impact; export menu for **My projects** / **Project summary**; secondary tools under **More**. See [DEMO_PACKAGE.md](DEMO_PACKAGE.md) for the live pitch script.
 3. **Left rail** — Node, Beam, Force, Support, Erase (mobile tool dock on small screens).
-4. **Canvas** — Draw and inspect; empty state offers “Place a joint” or “Load Howe example.”
-5. **Inspector** — Materials, results, checks, coach.
+4. **Canvas** — Draw and inspect; empty state offers Guided lesson, Challenges, Place a joint, or presets. Floating **Challenge** opens the scaffolded hub.
+5. **Inspector** — Materials, results, checks, coach; educational-estimate disclaimer on the model review card.
 6. **Impact** — Learning goals and presentation helpers.
 
 First open runs a short onboarding tour (reopen anytime from the book icon).
@@ -97,6 +156,8 @@ You can also paste a key in the coach panel (stored in browser local storage). P
 
 | Doc | Contents |
 | --- | --- |
+| [VIDEO_SCRIPT.md](VIDEO_SCRIPT.md) | CAC 2026 demo video script (rules checklist + speakable lines) |
+| [DEMO_PACKAGE.md](DEMO_PACKAGE.md) | Live Demo Mode launch + judge feature list |
 | [PRIVACY.md](PRIVACY.md) | Local storage, share links, optional Gemini data flow |
 | [LICENSE](LICENSE) | MIT |
 | [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | Dependencies and AI assistance record |

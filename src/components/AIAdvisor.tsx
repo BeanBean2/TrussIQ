@@ -7,6 +7,7 @@ import {
   hasGeminiApiKey,
   setGeminiApiKey,
 } from '../lib/geminiCoach';
+import { getPrivacyPrefs, setPrivacyPrefs } from '../lib/privacy';
 import type { AIAdviceItem, AIAnalysis, Beam, FEAResult, Node } from '../lib/types';
 
 interface AIAdvisorProps {
@@ -20,7 +21,7 @@ interface AIAdvisorProps {
 
 const MAX_CONVERSATION_MESSAGES = 41;
 const GREETING =
-  'Ask about yield, buckling, deflection, or next steps. With a Gemini API key I use Gemini 3.8 Flash on your solved model; without a key I answer from local engineering rules. Model geometry may be sent to Google only when Gemini is enabled — see PRIVACY.md.';
+  'Ask about yield, buckling, deflection, or next steps. By default I use local engineering rules only (nothing leaves this browser). Cloud Gemini needs Privacy → Allow cloud Gemini coach plus an API key.';
 
 type CoachMessage = { role: 'user' | 'assistant'; text: string };
 
@@ -48,6 +49,7 @@ function AIAdvisorConversation({
   const [keyConfigured, setKeyConfigured] = useState(() => hasGeminiApiKey());
   const [showKeyForm, setShowKeyForm] = useState(() => !hasGeminiApiKey());
   const [keyDraft, setKeyDraft] = useState('');
+  const [cloudAllowed, setCloudAllowed] = useState(() => getPrivacyPrefs().allowCloudCoach);
   const conversationRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -93,19 +95,23 @@ function AIAdvisorConversation({
 
     try {
       let reply: string;
-      if (hasGeminiApiKey()) {
+      const allowCloud = getPrivacyPrefs().allowCloudCoach;
+      setCloudAllowed(allowCloud);
+      if (allowCloud && hasGeminiApiKey()) {
         reply = await askGeminiCoach(text, nodes, beams, result, analysis);
       } else {
         reply =
-          getLocalCoachReply(text, analysis, result, nodes) +
-          '\n\n(Using local rules — add a Gemini API key above for full AI answers.)';
+          getLocalCoachReply(text, analysis, result, nodes, beams) +
+          (allowCloud
+            ? '\n\n(Using local rules — add a Gemini API key above for cloud answers.)'
+            : '\n\n(Using local rules — enable cloud coaching in Privacy settings to send model context to Google.)');
       }
       setMessages((current) =>
         [...current, { role: 'assistant' as const, text: reply }].slice(-MAX_CONVERSATION_MESSAGES),
       );
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Gemini request failed.';
-      const fallback = getLocalCoachReply(text, analysis, result, nodes);
+      const fallback = getLocalCoachReply(text, analysis, result, nodes, beams);
       setMessages((current) =>
         [
           ...current,
@@ -141,11 +147,38 @@ function AIAdvisorConversation({
                 : 'border-surface-600 text-surface-400'
             }`}
           >
-            {keyConfigured ? 'Gemini' : 'No key'}
+            {cloudAllowed && keyConfigured ? 'Gemini' : 'Local'}
           </span>
         </div>
 
-        {(showKeyForm || !keyConfigured) && (
+        <div className="space-y-2 border-b border-surface-700 bg-surface-900/60 px-3 py-3">
+          <label className="flex cursor-pointer items-start gap-2 text-[10px] leading-4 text-surface-300">
+            <input
+              type="checkbox"
+              className="mt-0.5 accent-teal-500"
+              checked={cloudAllowed}
+              onChange={(event) => {
+                const allowCloudCoach = event.target.checked;
+                setPrivacyPrefs({ allowCloudCoach });
+                setCloudAllowed(allowCloudCoach);
+                setMessages((current) => [
+                  ...current,
+                  {
+                    role: 'assistant',
+                    text: allowCloudCoach
+                      ? 'Cloud coaching allowed. With an API key, questions and a model summary will be sent to Google Gemini.'
+                      : 'Cloud coaching locked. Answers stay on local engineering rules only.',
+                  },
+                ]);
+              }}
+            />
+            <span>
+              Allow cloud Gemini coach (sends model summary + your question to Google). Off by default for classroom privacy.
+            </span>
+          </label>
+        </div>
+
+        {cloudAllowed && (showKeyForm || !keyConfigured) && (
           <form onSubmit={saveKey} className="space-y-2 border-b border-surface-700 bg-surface-900/60 px-3 py-3">
             <div className="flex items-center gap-1.5 text-[10px] font-medium text-surface-300">
               <KeyRound size={12} className="text-accent" />
@@ -162,7 +195,7 @@ function AIAdvisorConversation({
                 aistudio.google.com/apikey
               </a>
               . Stored only in this browser (or set <code className="text-surface-400">VITE_GEMINI_API_KEY</code> in{' '}
-              <code className="text-surface-400">.env.local</code>).
+              <code className="text-surface-400">.env.local</code>). Never paste keys into shared demos.
             </p>
             <div className="flex gap-2">
               <input
@@ -194,7 +227,7 @@ function AIAdvisorConversation({
           </form>
         )}
 
-        {keyConfigured && !showKeyForm && (
+        {cloudAllowed && keyConfigured && !showKeyForm && (
           <div className="flex justify-end border-b border-surface-700 px-3 py-1">
             <button
               type="button"
@@ -237,7 +270,11 @@ function AIAdvisorConversation({
           <input
             value={question}
             onChange={(event) => setQuestion(event.target.value)}
-            placeholder={keyConfigured ? 'Ask Gemini about your analysis…' : 'Ask (local rules until key is set)…'}
+            placeholder={
+              cloudAllowed && keyConfigured
+                ? 'Ask Gemini about your analysis…'
+                : 'Ask (local rules — cloud coaching locked by Privacy)…'
+            }
             aria-label="Message the AI coach"
             maxLength={500}
             disabled={busy}

@@ -1,3 +1,4 @@
+import { nodeLabel } from '../lib/entityLabels';
 import { X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useAccessibleDialog } from '../hooks/useAccessibleDialog';
@@ -14,11 +15,17 @@ export function ForceModal({ nodeId, initialFx, initialFy, onApply, onClose }: F
   const dialogRef = useAccessibleDialog(onClose);
   const [fx, setFx] = useState(String(initialFx));
   const [fy, setFy] = useState(String(initialFy));
+  const [error, setError] = useState<string | null>(null);
 
   const handleApply = useCallback(() => {
     const nx = Number(fx);
     const ny = Number(fy);
-    if (Number.isFinite(nx) && Number.isFinite(ny)) onApply(nx, ny);
+    if (!Number.isFinite(nx) || !Number.isFinite(ny)) {
+      setError('Enter valid numbers for Fx and Fy (Newtons). Empty or text values are not allowed.');
+      return;
+    }
+    setError(null);
+    onApply(nx, ny);
   }, [fx, fy, onApply]);
 
   useEffect(() => {
@@ -34,10 +41,10 @@ export function ForceModal({ nodeId, initialFx, initialFy, onApply, onClose }: F
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={`Apply force at node ${nodeId}`} className="w-full max-w-sm rounded-xl border border-surface-700 bg-surface-900 shadow-2xl">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={`Apply force at node ${nodeLabel(nodeId)}`} className="w-full max-w-sm rounded-xl border border-surface-700 bg-surface-900 shadow-2xl">
         <div className="flex items-center justify-between border-b border-surface-700 px-4 py-3">
           <h2 className="text-sm font-semibold tracking-wide text-surface-100">
-            Apply Force — {nodeId}
+            Apply Force — {nodeLabel(nodeId)}
           </h2>
           <button
             type="button"
@@ -53,25 +60,38 @@ export function ForceModal({ nodeId, initialFx, initialFy, onApply, onClose }: F
             Enter force components in Newtons. Positive Fy points downward on the canvas.
           </p>
           <label className="block space-y-1.5">
-            <span className="text-xs font-medium text-surface-300">Fₓ (N)</span>
+            <span className="text-xs font-medium text-surface-300">Fₓ horizontal (N)</span>
             <input
               type="number"
               data-dialog-initial-focus
               value={fx}
-              onChange={(e) => setFx(e.target.value)}
-              className="w-full rounded-lg border border-surface-700 bg-surface-800 px-3 py-2 font-mono text-sm text-surface-100 outline-none focus:border-accent"
+              onChange={(e) => {
+                setFx(e.target.value);
+                setError(null);
+              }}
+              aria-invalid={Boolean(error)}
+              className="w-full rounded-lg border border-surface-700 bg-surface-800 px-3 py-2 font-mono text-sm text-surface-100 outline-none focus:border-accent focus-visible:ring-2 focus-visible:ring-accent"
               autoFocus
             />
           </label>
           <label className="block space-y-1.5">
-            <span className="text-xs font-medium text-surface-300">Fᵧ (N)</span>
+            <span className="text-xs font-medium text-surface-300">Fᵧ vertical (N)</span>
             <input
               type="number"
               value={fy}
-              onChange={(e) => setFy(e.target.value)}
-              className="w-full rounded-lg border border-surface-700 bg-surface-800 px-3 py-2 font-mono text-sm text-surface-100 outline-none focus:border-accent"
+              onChange={(e) => {
+                setFy(e.target.value);
+                setError(null);
+              }}
+              aria-invalid={Boolean(error)}
+              className="w-full rounded-lg border border-surface-700 bg-surface-800 px-3 py-2 font-mono text-sm text-surface-100 outline-none focus:border-accent focus-visible:ring-2 focus-visible:ring-accent"
             />
           </label>
+          {error && (
+            <p className="text-[11px] leading-4 text-fail" role="alert">
+              {error}
+            </p>
+          )}
           <div className="flex justify-end gap-2 pt-1">
             <button
               type="button"

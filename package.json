@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:pages": "tsc -b && vite build --base /TrussIQ/",
-    "test": "tsx scripts/smoke-fea.ts",
+    "test": "tsx scripts/smoke-fea.ts && tsx scripts/materials-smoke.ts && tsx scripts/force-failure-smoke.ts",
     "lint": "oxlint",
     "check:pages-artifact": "node scripts/check-pages-artifact.mjs",
     "preview": "vite preview",

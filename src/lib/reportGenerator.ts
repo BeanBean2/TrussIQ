@@ -1,3 +1,4 @@
+import { memberLabel } from './entityLabels';
 /**
  * Educational structural study PDF — jsPDF + optional canvas screenshot.
  */
@@ -142,7 +143,7 @@ export async function generateOfficialReport(opts: ReportOptions): Promise<void>
       const E = getMaterial(beam?.materialId ?? state.materialId).E * 1000; // N/mm²
       const eps = E > 0 ? m.stress / E : 0; // strain = σ / E
       const row =
-        `${m.beamId.slice(-6).padEnd(8)} ` +
+        `${memberLabel(m.beamId, state.beams).replace('–', '-').padEnd(8)} ` +
         `${m.axialForce.toFixed(1).padStart(9)} ` +
         `${m.stress.toFixed(2).padStart(10)} ` +
         `${eps.toExponential(2).padStart(10)} ` +

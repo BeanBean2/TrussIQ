@@ -11,6 +11,10 @@ export default defineConfig({
     strictPort: true,
   },
   plugins: [react(), tailwindcss()],
+  optimizeDeps: {
+    // Prebundle PDF dependencies before the lazy workspace is opened.
+    include: ['jspdf', 'html2canvas'],
+  },
   build: {
     manifest: true,
   },

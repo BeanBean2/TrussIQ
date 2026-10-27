@@ -25,6 +25,8 @@ export function SectionEditor({
   const setKind = (kind: SectionKind) => {
     if (kind === 'solidRod') {
       onSectionChange({ kind: 'solidRod', diameter: 12 });
+    } else if (kind === 'rectangle') {
+      onSectionChange({ kind: 'rectangle', width: 10, height: 20 });
     } else if (kind === 'hollowTube') {
       onSectionChange({ kind: 'hollowTube', outerDiameter: 20, innerDiameter: 16 });
     } else {
@@ -66,6 +68,7 @@ export function SectionEditor({
           onChange={(e) => setKind(e.target.value as SectionKind)}
           className="w-full rounded-lg border border-surface-700 bg-surface-800 px-2 py-1.5 text-xs text-surface-100"
         >
+          <option value="rectangle">Rectangular stick</option>
           <option value="solidRod">Solid Circular Rod</option>
           <option value="hollowTube">Hollow Tube</option>
           <option value="iBeam">Structural I-Beam</option>
@@ -93,6 +96,7 @@ export function SectionEditor({
         </select>
       </label>
 
+      {section.kind === 'rectangle' && <><Num label="Width (mm)" value={section.width} onChange={width => onSectionChange({ ...section, width })} /><Num label="Height (mm)" value={section.height} onChange={height => onSectionChange({ ...section, height })} /></>}
       {section.kind === 'solidRod' && (
         <Num
           label="Diameter (mm)"
@@ -145,7 +149,7 @@ export function SectionEditor({
         </div>
         <div className="mt-1 text-surface-500">{props.label}</div>
         <div className="mt-1.5 font-sans text-[10px] text-surface-400">
-          Feeds <GlossaryTooltip term="Euler Buckling" /> via exact I
+          Feeds <GlossaryTooltip term="Euler Buckling" />. Material checks use the weakest axis.
         </div>
       </div>
     </div>

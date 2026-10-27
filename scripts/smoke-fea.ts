@@ -15,12 +15,33 @@ import { stressColorForPalette } from "../src/lib/resultPalette.ts";
 import { scoreDesign } from "../src/lib/designScore.ts";
 import { addTrussChords, connectHorizontalChords } from "../src/lib/chordBuilder.ts";
 import { DEFAULT_AREA, DEFAULT_MATERIAL_ID } from "../src/lib/materials.ts";
-import { parseTrussFile, serializeTruss } from "../src/lib/trussIO.ts";
+import {
+  createLessonGeometryOnly,
+  createLessonWithSupportsAndLoads,
+  GUIDED_LESSON_STEPS,
+  isLessonStepComplete,
+  summarizeLessonResults,
+} from "../src/lib/guidedLesson.ts";
+import { formatImportError, parseTrussFile, serializeTruss, tryParseTrussFile, TrussParseError } from "../src/lib/trussIO.ts";
+import { buildProjectSummary, renderSummaryHtml } from "../src/lib/projectSummary.ts";
+import {
+  applyDemoDesignChange,
+  createDemoStructure,
+  DEMO_STEPS,
+  solveDemoStructure,
+} from "../src/lib/demoMode.ts";
+import { alertForImportMessage, alertForSolverMessage } from "../src/lib/studentMessages.ts";
 import { createReviewLink, readReviewLink } from "../src/lib/reviewLink.ts";
 import { calculateEquilibriumResidual } from "../src/lib/equilibrium.ts";
 import { applySeismicLoads, applySelfWeightLoads, DEFAULT_SEISMIC } from "../src/lib/dynamicsEngine.ts";
 import { getMaterial } from "../src/lib/materials.ts";
 import { createBridgeChallengeStarter, evaluateBridgeChallenge, HIGH_WIND_PROFILE } from "../src/lib/bridgeChallenges.ts";
+import {
+  createChallengeStarterState,
+  EDUCATIONAL_DISCLAIMER,
+  evaluateScaffoldedChallenge,
+  SCAFFOLDED_CHALLENGES,
+} from "../src/lib/scaffoldedChallenges.ts";
 
 const presets = [
   ["howe", createHoweTruss],
@@ -86,6 +107,23 @@ if (!/^#[0-9a-f]{6}$/i.test(stressColorForPalette(1, true, "colorblind"))) {
   const jointsOnly = { ...framed, beams: [] };
   const connected = connectHorizontalChords(jointsOnly);
   if (connected.beams.length < 6) throw new Error("connectHorizontalChords failed to link rows.");
+}
+{
+  if (GUIDED_LESSON_STEPS.length !== 4) throw new Error("Guided lesson must have exactly 4 steps.");
+  const geometry = createLessonGeometryOnly();
+  if (!isLessonStepComplete(0, geometry, null)) throw new Error("Lesson geometry should complete step 1.");
+  if (isLessonStepComplete(1, geometry, null)) throw new Error("Geometry-only lesson must not complete step 2.");
+  const loaded = createLessonWithSupportsAndLoads(geometry);
+  if (!isLessonStepComplete(1, loaded, null)) throw new Error("Supports/loads scaffold should complete step 2.");
+  const solved = solveTruss(loaded.nodes, loaded.beams);
+  if (!solved.success) throw new Error("Lesson scaffold failed to solve.");
+  if (!isLessonStepComplete(2, loaded, solved) || !isLessonStepComplete(3, loaded, solved)) {
+    throw new Error("Solved lesson should complete steps 3 and 4.");
+  }
+  const summary = summarizeLessonResults(solved);
+  if (summary.tension + summary.compression + summary.zero !== solved.members.length) {
+    throw new Error("Lesson result summary member counts are inconsistent.");
+  }
 }
 const storyboardText = CAC_VIDEO_STORYBOARD.map((beat) => `${beat.time} ${beat.prompt}`).join("\n");
 const storyboardEnd = CAC_VIDEO_STORYBOARD.at(-1)?.time.split("–")[1];
@@ -163,6 +201,37 @@ if (!evaluateBridgeChallenge('high-wind-resilience', strongerWindBridge.nodes, s
   throw new Error("The high-wind challenge has no passing design path at its documented starter geometry.");
 }
 
+if (SCAFFOLDED_CHALLENGES.length < 9) {
+  throw new Error("Expected a full beginner→advanced scaffolded challenge catalog.");
+}
+const tiers = new Set(SCAFFOLDED_CHALLENGES.map((c) => c.tier));
+if (!tiers.has("beginner") || !tiers.has("intermediate") || !tiers.has("advanced")) {
+  throw new Error("Scaffolded challenges must cover beginner, intermediate, and advanced tiers.");
+}
+if (!EDUCATIONAL_DISCLAIMER.toLowerCase().includes("educational") || !EDUCATIONAL_DISCLAIMER.toLowerCase().includes("blueprint")) {
+  throw new Error("Educational disclaimer must clearly state results are not construction blueprints.");
+}
+for (const challenge of SCAFFOLDED_CHALLENGES) {
+  if (!challenge.goal.trim() || challenge.constraints.length === 0 || challenge.hints.length === 0) {
+    throw new Error(`Challenge ${challenge.id} is missing goal, constraints, or hints.`);
+  }
+  const starter = createChallengeStarterState(challenge);
+  if (starter.nodes.length === 0) {
+    throw new Error(`Challenge ${challenge.id} starter produced no nodes.`);
+  }
+  const evaluation = evaluateScaffoldedChallenge(challenge, starter.nodes, starter.beams, null, "none");
+  if (evaluation.checks.length === 0 || !evaluation.disclaimer.includes("educational")) {
+    throw new Error(`Challenge ${challenge.id} evaluation missing checks or disclaimer.`);
+  }
+  if (challenge.id === "beginner-read-the-colors") {
+    const solved = solveTruss(starter.nodes, starter.beams);
+    const scored = evaluateScaffoldedChallenge(challenge, starter.nodes, starter.beams, solved, "none");
+    if (!scored.complete) {
+      throw new Error("Beginner 'read the colors' starter should pass when FEA succeeds under yield.");
+    }
+  }
+}
+
 for (const [name, create] of presets) {
   const state = create();
   const result = solveTruss(state.nodes, state.beams);
@@ -194,6 +263,10 @@ for (const [name, create] of presets) {
   const imported = parseTrussFile(serializeTruss(state));
   if (imported.nodes.length !== state.nodes.length || imported.beams.length !== state.beams.length) {
     throw new Error(`${name} preset did not survive a serialize/import round trip.`);
+  }
+  const softImport = tryParseTrussFile(serializeTruss(state));
+  if (!softImport.ok || softImport.data.beams.length !== state.beams.length) {
+    throw new Error(`${name} tryParseTrussFile failed on a valid export.`);
   }
   const reviewUrl = createReviewLink(state, { origin: 'https://example.test', pathname: '/TrussIQ/' });
   const sharedReview = readReviewLink(new URL(reviewUrl).hash);
@@ -327,20 +400,119 @@ try {
     nodes: [],
     beams: [{ id: "m1", nodeI: "n1", nodeJ: "n2", area: 20, materialId: "unknown" }],
   }));
-} catch {
+} catch (err) {
   rejectedMalformedImport = true;
+  if (!(err instanceof TrussParseError) || !formatImportError(err).includes("incomplete")) {
+    throw new Error("Malformed imports should raise TrussParseError with a student-friendly message.");
+  }
 }
 if (!rejectedMalformedImport) throw new Error("The importer accepted a member with an unknown material.");
+
+const corruptSoft = tryParseTrussFile("{not-json");
+if (corruptSoft.ok || corruptSoft.error.code !== "not-json") {
+  throw new Error("tryParseTrussFile should soft-fail corrupted JSON without crashing.");
+}
+const emptySoft = tryParseTrussFile("   ");
+if (emptySoft.ok || emptySoft.error.code !== "empty") {
+  throw new Error("tryParseTrussFile should soft-fail empty files.");
+}
 
 const malformedSection = createHoweTruss();
 malformedSection.beams[0].section = { kind: "hollowTube", outerDiameter: 10, innerDiameter: 12 };
 let rejectedMalformedSection = false;
 try {
   parseTrussFile(serializeTruss(malformedSection));
-} catch {
+} catch (err) {
   rejectedMalformedSection = true;
+  if (!(err instanceof TrussParseError)) {
+    throw new Error("Invalid section imports should raise TrussParseError.");
+  }
 }
 if (!rejectedMalformedSection) throw new Error("The importer accepted a tube whose inner diameter exceeds its outer diameter.");
+
+const summarySample = createHoweTruss();
+const summaryResult = solveTruss(summarySample.nodes, summarySample.beams);
+const privateSummary = buildProjectSummary({
+  title: "Privacy check",
+  state: summarySample,
+  result: summaryResult,
+  reflection: "I noticed the bottom chord in tension.",
+  canvasImage: null,
+  includePersonalFields: false,
+  personal: { author: "Secret Student", course: "Period 3" },
+});
+if (privateSummary.personal || privateSummary.privacy.includePersonalFields) {
+  throw new Error("Project summaries must omit personal fields by default.");
+}
+const consentedSummary = buildProjectSummary({
+  title: "Consent check",
+  state: summarySample,
+  result: summaryResult,
+  reflection: "Reflection text",
+  canvasImage: "data:image/png;base64,abc",
+  includePersonalFields: true,
+  personal: { author: "Alex", course: "Physics" },
+});
+if (!consentedSummary.personal?.author || consentedSummary.personal.author !== "Alex") {
+  throw new Error("Project summaries should include personal fields only with explicit consent.");
+}
+const summaryHtml = renderSummaryHtml(privateSummary);
+if (!summaryHtml.includes("Educational estimate") || !summaryHtml.includes("omitted")) {
+  throw new Error("HTML project summary should include disclaimer and privacy note.");
+}
+if (!privateSummary.designScore || typeof privateSummary.designScore.score !== "number") {
+  throw new Error("Project summary must include a design score.");
+}
+
+if (DEMO_STEPS.length < 5) {
+  throw new Error("Demo Mode must include meet → FEA → read → change → compare beats.");
+}
+const demoState = createDemoStructure();
+if (demoState.nodes.length < 3 || demoState.beams.length < 3) {
+  throw new Error("Demo Mode polished starter is incomplete.");
+}
+const demoSolved = solveDemoStructure(demoState);
+if (!demoSolved.success) {
+  throw new Error(`Demo Mode starter failed to solve: ${demoSolved.message ?? "unknown"}`);
+}
+const demoChange = applyDemoDesignChange(demoState, demoSolved);
+if (!demoChange || demoChange.nextArea <= demoChange.previousArea) {
+  throw new Error("Demo Mode design change should reinforce (increase area of) a member.");
+}
+const afterChange = solveTruss(demoChange.state.nodes, demoChange.state.beams);
+if (!afterChange.success) {
+  throw new Error("Demo Mode model must still solve after the key design change.");
+}
+if (afterChange.maxSafetyRatio > demoSolved.maxSafetyRatio + 1e-9) {
+  throw new Error("Reinforcing peak members should not raise peak utilization.");
+}
+if (!(afterChange.maxSafetyRatio < demoSolved.maxSafetyRatio - 1e-6)) {
+  throw new Error("Reinforcing all peak-utilization members should lower peak utilization.");
+}
+
+const emptySolve = solveTruss([], []);
+if (emptySolve.success) throw new Error("Empty model must fail analysis.");
+const emptyAlert = alertForSolverMessage(emptySolve.message);
+if (!emptyAlert.title || !emptyAlert.message.toLowerCase().includes("joint")) {
+  throw new Error("Student-facing solver alerts should explain empty models in plain language.");
+}
+const unstableAlert = alertForSolverMessage("Unstable structure: internal mechanism detected");
+if (unstableAlert.title !== "Structure still moves" || !unstableAlert.tip) {
+  throw new Error("Unstable solver messages should map to a classroom title and tip.");
+}
+const importAlert = alertForImportMessage(formatImportError(new TrussParseError("bad", "not-json", "hint")));
+if (importAlert.title !== "Could not import file") {
+  throw new Error("Import failures should use a dedicated student alert title.");
+}
+
+const namedRoundTrip = parseTrussFile(serializeTruss(createHoweTruss(), "Classroom Howe"));
+if (namedRoundTrip.name !== "Classroom Howe") {
+  throw new Error("Export/import round trip must preserve the project name.");
+}
+const softEmpty = tryParseTrussFile("");
+if (softEmpty.ok || softEmpty.error.code !== "empty") {
+  throw new Error("Empty file import must soft-fail with code empty.");
+}
 
 const invalidReview = readReviewLink('#review=%%%');
 if (!invalidReview || invalidReview.state !== null || !invalidReview.error) {

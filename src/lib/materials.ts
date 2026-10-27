@@ -5,6 +5,7 @@ import type { Material } from './types';
  * in the same bridge (multi-material assemblies).
  */
 export const MATERIALS: Material[] = [
+  { id: 'wood', name: 'Wood (along grain)', E: 10, sigmaYield: 40, density: 0.6, costUSDPerKg: 1, color: '#d5a45c' },
   {
     id: 'al6061',
     name: 'Aluminum',
@@ -12,7 +13,7 @@ export const MATERIALS: Material[] = [
     sigmaYield: 276,
     density: 2.7,
     costUSDPerKg: 3.5,
-    color: '#a8b4c4',
+    color: '#e2e8f0',
   },
   {
     id: 'steel',
@@ -21,11 +22,11 @@ export const MATERIALS: Material[] = [
     sigmaYield: 250,
     density: 7.85,
     costUSDPerKg: 1.2,
-    color: '#6b7c8f',
+    color: '#7aa4cf',
   },
   {
     id: 'pla',
-    name: 'Plastic',
+    name: 'PLA plastic',
     E: 3.5,
     sigmaYield: 50,
     density: 1.24,
@@ -39,7 +40,7 @@ export const MATERIALS: Material[] = [
     sigmaYield: 600,
     density: 1.6,
     costUSDPerKg: 80,
-    color: '#1e293b',
+    color: '#a78bfa',
   },
   {
     id: 'titanium',
@@ -48,7 +49,7 @@ export const MATERIALS: Material[] = [
     sigmaYield: 880,
     density: 4.43,
     costUSDPerKg: 45,
-    color: '#94a3b8',
+    color: '#f9a8d4',
   },
   {
     id: 'rope',
@@ -65,5 +66,5 @@ export const DEFAULT_MATERIAL_ID = 'steel';
 export const DEFAULT_AREA = 100; // mm²
 
 export function getMaterial(id: string): Material {
-  return MATERIALS.find((m) => m.id === id) ?? MATERIALS[1];
+  return MATERIALS.find((m) => m.id === id) ?? MATERIALS.find(m => m.id === 'steel')!;
 }

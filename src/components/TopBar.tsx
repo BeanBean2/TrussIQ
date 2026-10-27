@@ -8,6 +8,7 @@ import {
   Command,
   Download,
   FileJson,
+  FolderOpen,
   HelpCircle,
   Keyboard,
   MonitorPlay,
@@ -22,6 +23,7 @@ import {
   Save,
   PanelLeft,
   PanelRight,
+  Shield,
   Sparkles,
   Sun,
   Trash2,
@@ -59,6 +61,8 @@ interface TopBarProps {
   onCopyTruss: () => void;
   onImportTruss: (file: File) => void;
   onExportOfficialReport: () => void;
+  onOpenProjectLibrary: () => void;
+  onOpenProjectSummary: () => void;
   draftStatus: string;
   onSaveDraft: () => void;
   onToggleTheme: () => void;
@@ -74,11 +78,13 @@ interface TopBarProps {
   onOpenCompare: () => void;
   onOpenShortcuts: () => void;
   onOpenDemo: () => void;
+  onOpenGuidedLesson: () => void;
   onOpenPresentation: () => void;
   onOpenMission: () => void;
   onOpenCollaboration: () => void;
   onOpenCommand: () => void;
   onOpenBrief: () => void;
+  onOpenPrivacy: () => void;
   onOpenImpact: () => void;
   onOpenHome: () => void;
   sidebarOpen: boolean;
@@ -115,6 +121,8 @@ export function TopBar({
   onCopyTruss,
   onImportTruss,
   onExportOfficialReport,
+  onOpenProjectLibrary,
+  onOpenProjectSummary,
   draftStatus,
   onSaveDraft,
   onToggleTheme,
@@ -130,11 +138,13 @@ export function TopBar({
   onOpenCompare,
   onOpenShortcuts,
   onOpenDemo,
+  onOpenGuidedLesson,
   onOpenPresentation,
   onOpenMission,
   onOpenCollaboration,
   onOpenCommand,
   onOpenBrief,
+  onOpenPrivacy,
   onOpenImpact,
   onOpenHome,
   sidebarOpen,
@@ -407,10 +417,21 @@ export function TopBar({
 
       <button
         type="button"
-        onClick={onOpenDemo}
-        title="Launch guided demo"
-        aria-label="Launch guided demo"
+        onClick={onOpenGuidedLesson}
+        title="Guided Lesson Mode — learn truss engineering step by step"
+        aria-label="Open guided lesson mode"
         className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-accent/40 bg-accent/10 px-2 py-2 text-xs text-accent hover:bg-accent/20"
+      >
+        <BookOpen size={13} />
+        <span className="topbar-action-label">Lesson</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={onOpenDemo}
+        title="Launch Demo Mode — polished truss, FEA, one design change"
+        aria-label="Launch Demo Mode"
+        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-accent/45 bg-accent/15 px-2 py-2 text-xs font-semibold text-accent hover:bg-accent/25"
       >
         <Sparkles size={13} />
         <span className="topbar-action-label">Demo</span>
@@ -494,8 +515,11 @@ export function TopBar({
                   { label: '3D preview / AR', detail: 'Orbit extruded model and export GLB', icon: Box, run: onOpenAR },
                   { label: 'Collapse animation', detail: 'Plastic failure sequence', icon: Zap, run: onOpenCollapse },
                   { label: 'Mission', detail: 'Scored design goals', icon: Flag, run: onOpenMission },
+                  { label: 'My projects', detail: 'Name, save, reopen, duplicate', icon: FolderOpen, run: onOpenProjectLibrary },
+                  { label: 'Project summary', detail: 'Viz, FEA, score, reflection export', icon: Sparkles, run: onOpenProjectSummary },
                   { label: 'Team / share', detail: 'Local comments and review links', icon: Users, run: onOpenCollaboration },
                   { label: 'Project brief', detail: 'Audience and presentation notes', icon: ClipboardList, run: onOpenBrief },
+                  { label: 'Privacy', detail: 'Private session, share & cloud consent, clear data', icon: Shield, run: onOpenPrivacy },
                 ] as const
               ).map((item) => (
                 <button
@@ -715,7 +739,18 @@ export function TopBar({
           </button>
           {exportOpen && (
             createPortal(
-              <div ref={exportMenuRef} role="menu" aria-label="Export and import" style={exportPosition} className="dropdown-enter fixed z-[200] w-60 overflow-hidden rounded-xl border border-surface-600/80 bg-surface-800/95 p-1.5 shadow-2xl shadow-black/30 backdrop-blur-xl">
+              <div ref={exportMenuRef} role="menu" aria-label="Export and import" style={exportPosition} className="dropdown-enter fixed z-[200] w-64 overflow-hidden rounded-xl border border-surface-600/80 bg-surface-800/95 p-1.5 shadow-2xl shadow-black/30 backdrop-blur-xl">
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-xs text-surface-200 transition-colors hover:bg-accent/10 hover:text-accent"
+                  onClick={() => {
+                    onOpenProjectLibrary();
+                    setExportOpen(false);
+                  }}
+                >
+                  <FolderOpen size={14} /> My projects…
+                </button>
                 <button
                   type="button"
                   role="menuitem"
@@ -725,7 +760,7 @@ export function TopBar({
                     setExportOpen(false);
                   }}
                 >
-                  <FileJson size={14} /> Save .truss
+                  <FileJson size={14} /> Save .truss file
                 </button>
                 <button
                   type="button"
@@ -748,6 +783,17 @@ export function TopBar({
                   }}
                 >
                   <Upload size={14} /> Import .truss
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-xs text-surface-200 transition-colors hover:bg-accent/10 hover:text-accent"
+                  onClick={() => {
+                    onOpenProjectSummary();
+                    setExportOpen(false);
+                  }}
+                >
+                  <Sparkles size={14} /> Project summary…
                 </button>
                 <button
                   type="button"
