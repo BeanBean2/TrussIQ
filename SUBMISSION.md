@@ -34,6 +34,7 @@ Suggested live path:
 | Inspiration | Schools often cannot afford commercial FEA; students deserve to *see* load paths. |
 | Coding challenge | Assembling and reducing the global stiffness matrix / boundary conditions for 2D trusses. |
 | What I learned | How tension vs compression and supports shape a design — and how to keep educational models honest about scope. |
+| Security / privacy | TrussIQ has no accounts or backend that stores student data—FEA runs in the browser, and models stay on the device. We keep coaching local by default, lock share links and optional Gemini until consent, omit names from exports unless users opt in, and offer Clear private data plus PRIVACY.md. |
 | Version 2.0 | Teacher class sets, offline PWA packaging, or richer auto-graded labs. |
 
 ## Classroom features to mention

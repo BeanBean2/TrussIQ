@@ -1716,6 +1716,7 @@ export function Dashboard({ initialDemo = false, initialSharedState = null, onOp
           onOpenGeometryTools={() => setShowGeometryTools(true)}
           onOpenProjectLibrary={() => setShowProjectLibrary(true)}
           onOpenProjectSummary={() => setShowProjectSummary(true)}
+          onOpenPrivacy={() => setShowPrivacy(true)}
         />
       )}
       {showPrivacy && (

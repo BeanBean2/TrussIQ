@@ -19,12 +19,13 @@
 
 - **Build** — Snap-to-grid canvas for joints, members, supports, and nodal loads; adaptive grid while zooming; pan and zoom freely.
 - **Solve** — Linear Direct Stiffness Method (`Ku = F`): axial forces, stress, yield utilization, displacements, and support reactions.
-- **Inspect** — Color-coded members, length labels, optional force labels, deflection overlay, formula inspector, and structure audit.
-- **Compare** — Materials, sections, mass/cost estimates, wind and seismic *quasi-static* load cases, side-by-side compare, interactive **3D editor**, and extruded 3D/GLB preview.
+- **Inspect** — Green→red stress heatmap after FEA, length labels, optional force labels, deflection overlay, formula inspector, and structure audit.
+- **Compare** — Materials, sections, mass/cost estimates, wind and seismic *quasi-static* load cases, side-by-side compare, interactive **3D editor** (views, parts, chords, mirrors), and extruded 3D/GLB preview.
 - **Learn** — **Demo Mode** (turnkey live pitch with Reset Demo), **Guided Lesson Mode** (4-step truss intro), **scaffolded challenges** (beginner → advanced with live FEA scorecards), UI tour, mission mode, printable lab worksheet, engineering coach (local rules by default).
 - **Classroom** — SI ↔ US display units, colorblind-safer result palette, named class-period drafts, learning portfolio export.
 - **Projects** — Named local project library (save / reopen / duplicate), `.truss` import/export with friendly validation errors, and privacy-aware **project summaries** (model viz, FEA, design score, reflection).
-- **Share** — Local drafts, review links, PDF reports, and project brief.
+- **Privacy** — No accounts or TrussIQ backend; share links and cloud Gemini locked until consent; names omitted from exports by default; Clear private data in **More → Privacy**.
+- **Share** — Local drafts, opt-in review links, PDF reports, and project brief.
 
 **Educational estimate only:** TrussIQ results are educational estimates from a linear, axial-only Direct Stiffness Method model. They are **not** certified construction blueprints, code compliance, or professional engineering approval.
 

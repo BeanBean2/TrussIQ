@@ -501,25 +501,25 @@ export function TopBar({
               role="menu"
               aria-label="More tools"
               style={morePosition}
-              className="dropdown-enter menu-expand fixed z-[200] w-[16.25rem] overflow-hidden rounded-xl border border-surface-600/80 bg-surface-800/95 p-1.5 shadow-2xl shadow-black/30 backdrop-blur-xl"
+              className="dropdown-enter menu-expand fixed z-[200] max-h-[min(28rem,calc(100vh-1rem))] w-[16.25rem] overflow-y-auto overscroll-contain rounded-xl border border-surface-600/80 bg-surface-800/95 p-1.5 shadow-2xl shadow-black/30 backdrop-blur-xl"
             >
-              <div className="px-3 pb-1.5 pt-1">
+              <div className="sticky top-0 z-10 -mx-1.5 mb-0.5 border-b border-surface-700/60 bg-surface-800/95 px-3 pb-1.5 pt-1 backdrop-blur-xl">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-accent">Explore</p>
                 <p className="mt-0.5 text-[10px] text-surface-500">Secondary tools stay here so the bar stays calm.</p>
               </div>
               {(
                 [
+                  { label: 'Privacy', detail: 'Private session, share & cloud consent, clear data', icon: Shield, run: onOpenPrivacy },
                   { label: 'Present mode', detail: 'Full-canvas classroom view', icon: MonitorPlay, run: onOpenPresentation },
-                  { label: 'Compare designs', detail: 'Side-by-side result check', icon: Columns2, run: onOpenCompare },
-                  { label: 'Edit in 3D', detail: 'Move joints and draw members in 3D', icon: Box, run: onOpen3DEditor },
-                  { label: '3D preview / AR', detail: 'Orbit extruded model and export GLB', icon: Box, run: onOpenAR },
-                  { label: 'Collapse animation', detail: 'Plastic failure sequence', icon: Zap, run: onOpenCollapse },
-                  { label: 'Mission', detail: 'Scored design goals', icon: Flag, run: onOpenMission },
                   { label: 'My projects', detail: 'Name, save, reopen, duplicate', icon: FolderOpen, run: onOpenProjectLibrary },
+                  { label: 'Edit in 3D', detail: 'Views, parts, chords, mirrors, supports', icon: Box, run: onOpen3DEditor },
+                  { label: 'Compare designs', detail: 'Side-by-side result check', icon: Columns2, run: onOpenCompare },
+                  { label: '3D preview / AR', detail: 'Orbit extruded model and export GLB', icon: Box, run: onOpenAR },
                   { label: 'Project summary', detail: 'Viz, FEA, score, reflection export', icon: Sparkles, run: onOpenProjectSummary },
+                  { label: 'Mission', detail: 'Scored design goals', icon: Flag, run: onOpenMission },
                   { label: 'Team / share', detail: 'Local comments and review links', icon: Users, run: onOpenCollaboration },
                   { label: 'Project brief', detail: 'Audience and presentation notes', icon: ClipboardList, run: onOpenBrief },
-                  { label: 'Privacy', detail: 'Private session, share & cloud consent, clear data', icon: Shield, run: onOpenPrivacy },
+                  { label: 'Collapse animation', detail: 'Plastic failure sequence', icon: Zap, run: onOpenCollapse },
                 ] as const
               ).map((item) => (
                 <button

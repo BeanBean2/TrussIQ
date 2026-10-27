@@ -13,6 +13,7 @@ import {
   Search,
   Sparkles,
   FolderOpen,
+  Shield,
   Trophy,
   Users,
   Wind,
@@ -46,6 +47,7 @@ interface CommandPaletteProps {
   onOpenGeometryTools: () => void;
   onOpenProjectLibrary: () => void;
   onOpenProjectSummary: () => void;
+  onOpenPrivacy: () => void;
 }
 
 interface Command {
@@ -81,6 +83,7 @@ export function CommandPalette({
   onOpenGeometryTools,
   onOpenProjectLibrary,
   onOpenProjectSummary,
+  onOpenPrivacy,
 }: CommandPaletteProps) {
   const dialogRef = useAccessibleDialog(onClose);
   const [query, setQuery] = useState('');
@@ -106,16 +109,17 @@ export function CommandPalette({
       { id: 'present', label: 'Enter presentation mode', description: 'Show a clean, distraction-free analysis view', group: 'Review', icon: <MonitorPlay size={15} />, run: onOpenPresentation },
       { id: 'compare', label: 'Compare designs', description: 'Inspect two design states side by side', group: 'Review', icon: <BrainCircuit size={15} />, run: onOpenCompare },
       { id: 'collapse', label: 'Play collapse animation', description: 'Explore progressive member failure', group: 'Explore', icon: <Sparkles size={15} />, run: onOpenCollapse },
-      { id: 'edit3d', label: 'Edit in 3D', description: 'Move joints and draw members in an interactive 3D view', group: 'Explore', icon: <Box size={15} />, run: onOpen3DEditor },
+      { id: 'edit3d', label: 'Edit in 3D', description: 'Views, parts, chords, mirrors, supports, and loads', group: 'Explore', icon: <Box size={15} />, run: onOpen3DEditor },
       { id: 'ar', label: 'Open 3D preview', description: 'Inspect the extruded model and export GLB for AR', group: 'Explore', icon: <Box size={15} />, run: onOpenAR },
       { id: 'projects', label: 'My projects', description: 'Name, save, reopen, or duplicate designs in this browser', group: 'Files', icon: <FolderOpen size={15} />, run: onOpenProjectLibrary },
       { id: 'summary', label: 'Project summary', description: 'Export viz, FEA, design score, and reflection (privacy-aware)', group: 'Files', icon: <Sparkles size={15} />, run: onOpenProjectSummary },
       { id: 'export', label: 'Export design report', description: 'Open the export and reporting menu', group: 'Files', icon: <Download size={15} />, run: onExport },
+      { id: 'privacy', label: 'Privacy settings', description: 'Private session, share & cloud consent, clear local data', group: 'Files', icon: <Shield size={15} />, run: onOpenPrivacy },
       { id: 'clear', label: 'Clear current design', description: 'Remove all nodes and members', group: 'Files', icon: <X size={15} />, run: onClear },
       { id: 'brief', label: 'Edit project brief', description: 'Capture the objective, constraints, and story behind the design', group: 'Review', icon: <ClipboardList size={15} />, run: onOpenBrief },
       { id: 'impact', label: 'Open challenge impact dashboard', description: 'Track learning evidence and create a judge-ready project story', group: 'Review', icon: <Flag size={15} />, run: onOpenImpact },
     ],
-    [onClear, onDynamics, onExport, onLoadPreset, onOpen3DEditor, onOpenAR, onOpenBrief, onOpenCollaboration, onOpenCollapse, onOpenCompare, onOpenDemo, onOpenGeometryTools, onOpenGuidedLesson, onOpenImpact, onOpenMission, onOpenPresentation, onOpenProjectLibrary, onOpenProjectSummary, onOpenScaffoldedChallenges, onOpenShortcuts, onOpenTutorial, onRunSolver],
+    [onClear, onDynamics, onExport, onLoadPreset, onOpen3DEditor, onOpenAR, onOpenBrief, onOpenCollaboration, onOpenCollapse, onOpenCompare, onOpenDemo, onOpenGeometryTools, onOpenGuidedLesson, onOpenImpact, onOpenMission, onOpenPresentation, onOpenPrivacy, onOpenProjectLibrary, onOpenProjectSummary, onOpenScaffoldedChallenges, onOpenShortcuts, onOpenTutorial, onRunSolver],
   );
   const filtered = commands.filter((command) => `${command.label} ${command.description} ${command.group}`.toLowerCase().includes(query.toLowerCase()));
 
